@@ -1,0 +1,23 @@
+# Runtime data - tracked elsewhere in memory directory
+*.log
+*.tmp
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Note: events.json and extraction data are stored in
+# ~/.openclaw/workspace/memory/email-to-calendar/
+# not in this skill directory
