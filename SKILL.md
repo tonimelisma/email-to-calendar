@@ -1,7 +1,7 @@
 ---
 name: email-to-calendar
-version: 1.2.0
-description: Extract calendar events from emails and create calendar entries. Supports two modes: (1) Direct inbox monitoring - scans all emails for events, or (2) Forwarded emails - processes emails you forward to a dedicated address.
+version: 1.3.0
+description: Extract calendar events from emails and create calendar entries. Supports two modes: (1) Direct inbox monitoring - scans all emails for events, or (2) Forwarded emails - processes emails you forward to a dedicated address. Features event tracking for efficient updates and deletions.
 ---
 
 > **⚠️ CRITICAL RULES — READ BEFORE PROCESSING ANY EMAIL**
@@ -11,7 +11,8 @@ description: Extract calendar events from emails and create calendar entries. Su
 > 3. **READ CONFIG FIRST** — Load and apply `ignore_patterns` and `auto_create_patterns` before presenting events
 > 4. **READ MEMORY.MD** — Check for user preferences stored from previous sessions
 > 5. **INCLUDE ALL CONFIGURED ATTENDEES** — When creating/updating/deleting events, always include attendees from config with `--attendees` flag (and `--send-updates all` if supported)
-> 6. **ALWAYS CHECK CALENDAR FOR DUPLICATES** — Before creating any event, search the calendar for existing events on that date. Update if new info found, skip if identical.
+> 6. **CHECK TRACKED EVENTS FIRST** — Use `lookup_event.sh --email-id` to find existing events before calendar search (faster, more reliable)
+> 7. **TRACK ALL CREATED EVENTS** — The `create_event.sh` script automatically tracks events; use tracked IDs for updates/deletions
 
 # Email to Calendar Skill
 
@@ -331,43 +332,61 @@ Present ALL items to the user (including skipped ones, so they know what was fil
 
 **DO NOT PROCEED until user responds.** Even for auto-create events, get a simple "yes" confirmation.
 
-### 6. Check Calendar for Duplicates (MANDATORY)
+### 6. Check for Duplicates (MANDATORY)
 
 **⚠️ THIS IS A HARD REQUIREMENT — ALWAYS DO THIS BEFORE CREATING ANY EVENT**
 
-For EACH event to be created, search the calendar for existing events on that date:
+For EACH event to be created, first check tracked events, then fall back to calendar search:
 
 ```bash
-# Get the date of the event
+SCRIPTS_DIR="$HOME/.openclaw/workspace/skills/email-to-calendar/scripts"
 EVENT_DATE="2026-02-11"
 CALENDAR_ID=$(jq -r '.calendar_id' "$CONFIG_FILE")
 
-# Search for events on that date
-gog calendar events "$CALENDAR_ID" \
-    --from "${EVENT_DATE}T00:00:00" \
-    --to "${EVENT_DATE}T23:59:59" \
-    --json
+# Step 1: Check local tracking first (fast, reliable)
+TRACKED=$("$SCRIPTS_DIR/lookup_event.sh" --email-id "$EMAIL_ID")
+if [ "$(echo "$TRACKED" | jq 'length')" -gt 0 ]; then
+    EXISTING_EVENT_ID=$(echo "$TRACKED" | jq -r '.[0].event_id')
+    echo "Found in tracking: $EXISTING_EVENT_ID"
+fi
+
+# Step 2: If not found by email_id, try summary match
+if [ -z "$EXISTING_EVENT_ID" ]; then
+    TRACKED=$("$SCRIPTS_DIR/lookup_event.sh" --summary "$EVENT_TITLE")
+    # Filter to matching date
+    EXISTING_EVENT_ID=$(echo "$TRACKED" | jq -r --arg date "$EVENT_DATE" \
+        '[.[] | select(.start | startswith($date))] | .[0].event_id // empty')
+fi
+
+# Step 3: Fall back to calendar search if not tracked
+if [ -z "$EXISTING_EVENT_ID" ]; then
+    gog calendar events "$CALENDAR_ID" \
+        --from "${EVENT_DATE}T00:00:00" \
+        --to "${EVENT_DATE}T23:59:59" \
+        --json
+fi
 ```
 
 **Decision logic:**
-1. **No existing events on that date** → Create the new event
-2. **Existing event with similar title (2+ matching keywords):**
-   - Compare details (time, description, attendees)
-   - **If new info found** → Update the existing event with new details
-   - **If identical** → Skip creation (already exists)
-3. **Existing event with different title** → Create the new event (not a duplicate)
+1. **Found in tracking by email_id** → Use tracked event_id for update
+2. **Found in tracking by summary+date** → Use tracked event_id for update
+3. **Found in calendar search (similar title)** → Update and add to tracking
+4. **Not found anywhere** → Create new event (automatically tracked)
 
 **Example duplicate detection:**
 ```bash
 # Event to create: "Staff Development Day - No School" on Feb 12
-# Existing event: "Staff Development Day" on Feb 12
+# Email ID: 19c1c86dcc389443
 
-# Keywords: "Staff", "Development", "Day"
-# Matches: 3 keywords → DUPLICATE
+# Check 1: tracking by email_id
+TRACKED=$("$SCRIPTS_DIR/lookup_event.sh" --email-id "19c1c86dcc389443")
+# Returns: [{"event_id": "abc123", ...}] → UPDATE abc123
 
-# Check if new info:
-# - New description has more detail? → Update
-# - Same info? → Skip
+# OR if not found, check 2: tracking by summary
+TRACKED=$("$SCRIPTS_DIR/lookup_event.sh" --summary "Staff Development")
+# Returns events with similar summaries → filter by date
+
+# OR if not tracked, check 3: calendar search (legacy fallback)
 ```
 
 **Always use update when duplicate found:**
@@ -382,6 +401,46 @@ gog calendar update "$CALENDAR_ID" "$EXISTING_EVENT_ID" \
 ### 7. Create or Update Calendar Events
 
 **IMPORTANT: Always include configured attendees in ALL calendar operations.**
+
+#### Using create_event.sh (Recommended)
+
+The `create_event.sh` script handles date parsing, time formatting, and **automatic event tracking**:
+
+```bash
+SCRIPTS_DIR="$HOME/.openclaw/workspace/skills/email-to-calendar/scripts"
+
+# Create new event (automatically tracked)
+"$SCRIPTS_DIR/create_event.sh" \
+    "$CALENDAR_ID" \
+    "Event Title" \
+    "February 11, 2026" \
+    "9:00 AM" \
+    "5:00 PM" \
+    "Event description" \
+    "$ATTENDEE_EMAILS" \
+    "" \
+    "$EMAIL_ID"
+
+# Update existing event (pass event_id as 8th parameter)
+"$SCRIPTS_DIR/create_event.sh" \
+    "$CALENDAR_ID" \
+    "Updated Title" \
+    "February 11, 2026" \
+    "10:00 AM" \
+    "6:00 PM" \
+    "Updated description" \
+    "$ATTENDEE_EMAILS" \
+    "$EXISTING_EVENT_ID" \
+    "$EMAIL_ID"
+```
+
+The script:
+- Parses various date formats (e.g., "February 11, 2026", "02/11/2026")
+- Parses time formats (e.g., "9:00 AM", "14:30")
+- Outputs the event ID on success
+- Automatically calls `track_event.sh` to store the event in tracking
+
+#### Direct gog commands (for advanced use)
 
 ```bash
 # Read attendees from config
@@ -399,6 +458,8 @@ gog calendar create "$CALENDAR_ID" \
     --attendees "$ATTENDEE_EMAILS" \
     --send-updates all
 ```
+
+**Note:** When using direct gog commands, remember to manually track the event using `track_event.sh`.
 
 **Never create an event without the `--attendees` and `--send-updates all` flags if attendees are configured.**
 
@@ -606,8 +667,127 @@ Present the items and ask which to process.
 - **Config**: `~/.config/email-to-calendar/config.json`
 - **Extractions**: `~/.openclaw/workspace/memory/email-extractions/`
 - **Index**: `~/.openclaw/workspace/memory/email-extractions/index.json`
+- **Event Tracking**: `~/.openclaw/workspace/memory/email-to-calendar/events.json`
 - **Scripts**: `~/.openclaw/workspace/skills/email-to-calendar/scripts/`
 - **Memory**: `~/.openclaw/workspace/skills/email-to-calendar/MEMORY.md`
+
+## Event Tracking System
+
+Events created by this skill are automatically tracked in `events.json` for efficient updates and deletions without searching the calendar.
+
+### Tracking File Structure
+
+Located at `~/.openclaw/workspace/memory/email-to-calendar/events.json`:
+```json
+{
+  "events": [
+    {
+      "event_id": "abc123xyz",
+      "calendar_id": "primary",
+      "email_id": "19c1c86dcc389443",
+      "summary": "Staff Development Day",
+      "start": "2026-02-12T09:00:00",
+      "created_at": "2026-02-01T21:15:00",
+      "updated_at": null
+    }
+  ]
+}
+```
+
+### Tracking Scripts
+
+#### Look up tracked events
+```bash
+# Find by email ID (best for duplicate detection)
+./scripts/lookup_event.sh --email-id "19c1c86dcc389443"
+
+# Find by event ID
+./scripts/lookup_event.sh --event-id "abc123xyz"
+
+# Find by summary (partial match)
+./scripts/lookup_event.sh --summary "Staff Development"
+
+# List all tracked events
+./scripts/lookup_event.sh --list
+```
+
+#### Track a new event (called automatically by create_event.sh)
+```bash
+./scripts/track_event.sh \
+    --event-id "abc123xyz" \
+    --calendar-id "primary" \
+    --email-id "19c1c86dcc389443" \
+    --summary "Staff Development Day" \
+    --start "2026-02-12T09:00:00"
+```
+
+#### Update tracked event metadata
+```bash
+./scripts/update_tracked_event.sh --event-id "abc123xyz" --summary "New Title"
+```
+
+#### Delete from tracking (after calendar deletion)
+```bash
+./scripts/delete_tracked_event.sh --event-id "abc123xyz"
+```
+
+### Using Tracking for Duplicate Detection
+
+**IMPORTANT:** Always check tracked events BEFORE searching the calendar:
+
+```bash
+# Step 1: Check local tracking first (fast)
+TRACKED=$(./scripts/lookup_event.sh --email-id "$EMAIL_ID")
+if [ "$(echo "$TRACKED" | jq 'length')" -gt 0 ]; then
+    EXISTING_EVENT_ID=$(echo "$TRACKED" | jq -r '.[0].event_id')
+    echo "Found tracked event: $EXISTING_EVENT_ID"
+    # Use this ID for updates
+fi
+
+# Step 2: Only search calendar if not found in tracking (fallback)
+if [ -z "$EXISTING_EVENT_ID" ]; then
+    gog calendar events "$CALENDAR_ID" --from "$DATE" --to "$DATE" --json
+fi
+```
+
+### Workflow for Updates
+
+When an email contains updates to a previously created event:
+
+```bash
+# 1. Look up by email_id
+TRACKED=$(./scripts/lookup_event.sh --email-id "$EMAIL_ID")
+EVENT_ID=$(echo "$TRACKED" | jq -r '.[0].event_id // empty')
+
+if [ -n "$EVENT_ID" ]; then
+    # 2. Update the calendar event using tracked ID
+    gog calendar update "$CALENDAR_ID" "$EVENT_ID" \
+        --summary "Updated Title" \
+        --description "Updated details"
+
+    # 3. Update tracking metadata
+    ./scripts/update_tracked_event.sh --event-id "$EVENT_ID" --summary "Updated Title"
+fi
+```
+
+### Workflow for Deletions
+
+When an email indicates an event is cancelled:
+
+```bash
+# 1. Look up by email_id or summary
+TRACKED=$(./scripts/lookup_event.sh --email-id "$EMAIL_ID")
+EVENT_ID=$(echo "$TRACKED" | jq -r '.[0].event_id // empty')
+CALENDAR_ID=$(echo "$TRACKED" | jq -r '.[0].calendar_id // "primary"')
+
+if [ -n "$EVENT_ID" ]; then
+    # 2. Delete from calendar
+    gog calendar delete "$CALENDAR_ID" "$EVENT_ID"
+
+    # 3. Remove from tracking
+    ./scripts/delete_tracked_event.sh --event-id "$EVENT_ID"
+fi
+```
 
 ## Example Usage
 
