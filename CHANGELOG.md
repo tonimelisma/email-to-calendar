@@ -1,5 +1,63 @@
 # Changelog
 
+## [1.9.1] - 2026-02-02
+
+### Added
+- **Comprehensive Test Suite**: 135 unit tests for all Python utility modules
+  - `tests/test_common.py`: Tests for shared utility functions
+  - `tests/test_date_parser.py`: Tests for date/time parsing
+  - `tests/test_json_store.py`: Tests for JSON file operations
+  - `tests/test_event_tracking.py`: Tests for event tracking operations
+  - `tests/test_pending_ops.py`: Tests for pending invites operations
+  - `tests/test_activity_ops.py`: Tests for activity logging
+  - `tests/test_changelog_ops.py`: Tests for changelog operations
+  - `tests/test_invite_ops.py`: Tests for invite status updates
+  - `tests/test_undo_ops.py`: Tests for undo operations
+- **Test Runner**: `scripts/run_tests.sh` for easy test execution
+- **Zero-Dependency Testing**: All tests use Python's built-in `unittest` module (no pip install required)
+
+### Changed
+- `utils/__init__.py`: Added package init file for proper module imports
+
+## [1.8.0] - 2026-02-02
+
+### Changed
+- **Major Refactoring**: Extracted embedded Python to shared utility modules
+  - `utils/json_store.py`: Common JSON file operations (load_json, save_json, ensure_dir)
+  - `utils/common.py`: Shared utilities (get_day_of_week, format_timestamp, generate_id, time_ago)
+  - `utils/changelog_ops.py`: Changelog logic extracted from changelog.sh
+  - `utils/activity_ops.py`: Activity log logic extracted from activity_log.sh
+  - `utils/pending_ops.py`: Pending invites logic extracted from list_pending.sh
+  - `utils/event_tracking.py`: Event tracking logic consolidated from multiple scripts
+  - `utils/invite_ops.py`: Invite status updates extracted from update_invite_status.sh
+  - `utils/undo_ops.py`: Undo helper functions extracted from undo.sh
+- **Streamlined SKILL.md**: Reduced from 41KB to 10KB (75% reduction)
+  - Removed redundant setup section (now references SETUP.md)
+  - Moved detailed CLI reference to references/gog-commands.md
+  - Consolidated repetitive examples
+- **Refactored Scripts**: Shell scripts now thin wrappers delegating to Python utilities
+  - changelog.sh: 436 → 111 lines
+  - activity_log.sh: 282 → 84 lines
+  - list_pending.sh: 235 → 36 lines
+  - Fixed duplicate get_day_of_week() function in list_pending.sh
+
+### Added
+- **references/gog-commands.md**: Detailed gog CLI reference with recurrence patterns, flags, and advanced syntax
+
+## [1.7.0] - 2026-02-02
+
+### Added
+- **Shared Date Parser**: Extracted date/time parsing to `scripts/utils/date_parser.py` to reduce code duplication (~70 lines removed)
+- **Capability Requirements**: Skill now declares semantic capabilities (`read_email`, `create_calendar_event`, `update_calendar_event`) instead of just binary requirements
+- **Email Scanning Heartbeat**: BOOT.md now includes email scanning section for automatic email checks during heartbeat cycles
+- **Capability Verification**: On first activation, skill verifies agent has required email/calendar capabilities
+
+### Changed
+- **Tool Flexibility**: SKILL.md and SETUP.md now note that `gog` commands are reference examples; agents with alternative tools (MCP servers, other CLIs) can use those instead
+- **package.json**: `requires.capabilities` added alongside `requires.bins`
+- **create_event.sh**: Now uses shared `date_parser.py` instead of inline Python
+- **check_duplicate.sh**: Now uses shared `date_parser.py` instead of inline Python
+
 ## [1.6.0] - 2026-02-02
 
 ### Added

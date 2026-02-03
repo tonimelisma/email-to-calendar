@@ -4,7 +4,8 @@
 #
 # Updates the tracked event's metadata to reflect calendar changes
 
-EVENTS_FILE="$HOME/.openclaw/workspace/memory/email-to-calendar/events.json"
+SCRIPT_DIR="$(dirname "$0")"
+UTILS_DIR="$SCRIPT_DIR/utils"
 
 # Parse arguments
 EVENT_ID=""
@@ -37,47 +38,8 @@ if [ -z "$EVENT_ID" ]; then
     exit 1
 fi
 
-if [ ! -f "$EVENTS_FILE" ]; then
-    echo "Error: No events file found" >&2
-    exit 1
-fi
-
-python3 << EOF
-import json
-import sys
-from datetime import datetime
-
-events_file = "$EVENTS_FILE"
-event_id = "$EVENT_ID"
-new_summary = "$NEW_SUMMARY"
-new_start = "$NEW_START"
-
-try:
-    with open(events_file, 'r') as f:
-        data = json.load(f)
-except (FileNotFoundError, json.JSONDecodeError):
-    print("Error: Could not read events file", file=sys.stderr)
-    sys.exit(1)
-
-# Find and update the event
-found = False
-for event in data.get('events', []):
-    if event.get('event_id') == event_id:
-        if new_summary:
-            event['summary'] = new_summary
-        if new_start:
-            event['start'] = new_start
-        event['updated_at'] = datetime.now().isoformat()
-        found = True
-        break
-
-if not found:
-    print(f"Warning: Event {event_id} not found in tracking", file=sys.stderr)
-    sys.exit(1)
-
-# Save
-with open(events_file, 'w') as f:
-    json.dump(data, f, indent=2)
-
-print(f"Updated tracked event: {event_id}")
-EOF
+# Delegate to Python implementation
+python3 "$UTILS_DIR/event_tracking.py" update \
+    --event-id "$EVENT_ID" \
+    --summary "$NEW_SUMMARY" \
+    --start "$NEW_START"

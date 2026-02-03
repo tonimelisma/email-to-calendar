@@ -7,9 +7,16 @@
 # - Update or delete events without searching the calendar
 # - Track event history
 
-EVENTS_FILE="$HOME/.openclaw/workspace/memory/email-to-calendar/events.json"
+SCRIPT_DIR="$(dirname "$0")"
+UTILS_DIR="$SCRIPT_DIR/utils"
 
 # Parse arguments
+EVENT_ID=""
+CALENDAR_ID="primary"
+EMAIL_ID=""
+SUMMARY=""
+START=""
+
 while [[ $# -gt 0 ]]; do
     case $1 in
         --event-id)
@@ -44,59 +51,10 @@ if [ -z "$EVENT_ID" ]; then
     exit 1
 fi
 
-# Ensure events file exists
-if [ ! -f "$EVENTS_FILE" ]; then
-    mkdir -p "$(dirname "$EVENTS_FILE")"
-    echo '{"events": []}' > "$EVENTS_FILE"
-fi
-
-# Add event to tracking using jq
-CREATED_AT=$(date -Iseconds)
-
-python3 << EOF
-import json
-import os
-
-events_file = "$EVENTS_FILE"
-event_id = "$EVENT_ID"
-calendar_id = "${CALENDAR_ID:-primary}"
-email_id = "$EMAIL_ID"
-summary = "$SUMMARY"
-start = "$START"
-created_at = "$CREATED_AT"
-
-# Load existing events
-try:
-    with open(events_file, 'r') as f:
-        data = json.load(f)
-except (FileNotFoundError, json.JSONDecodeError):
-    data = {"events": []}
-
-# Check if event already tracked (by event_id)
-existing = next((e for e in data['events'] if e['event_id'] == event_id), None)
-if existing:
-    # Update existing entry
-    existing['summary'] = summary
-    existing['start'] = start
-    existing['updated_at'] = created_at
-    if email_id:
-        existing['email_id'] = email_id
-else:
-    # Add new entry
-    new_event = {
-        "event_id": event_id,
-        "calendar_id": calendar_id,
-        "email_id": email_id if email_id else None,
-        "summary": summary,
-        "start": start,
-        "created_at": created_at,
-        "updated_at": None
-    }
-    data['events'].append(new_event)
-
-# Save
-with open(events_file, 'w') as f:
-    json.dump(data, f, indent=2)
-
-print(f"Tracked event: {event_id}")
-EOF
+# Delegate to Python implementation
+python3 "$UTILS_DIR/event_tracking.py" track \
+    --event-id "$EVENT_ID" \
+    --calendar-id "$CALENDAR_ID" \
+    --email-id "$EMAIL_ID" \
+    --summary "$SUMMARY" \
+    --start "$START"

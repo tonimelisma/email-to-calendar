@@ -15,8 +15,7 @@
 # Requires gog CLI for calendar operations
 
 SCRIPTS_DIR="$(dirname "$0")"
-CHANGELOG_FILE="$HOME/.openclaw/workspace/memory/email-to-calendar/changelog.json"
-UNDO_WINDOW_HOURS=24
+UTILS_DIR="$SCRIPTS_DIR/utils"
 
 # Parse action
 ACTION="${1:-}"
@@ -45,38 +44,7 @@ fi
 case "$ACTION" in
     last)
         # Find most recent undoable change
-        CHANGE_ID=$(python3 << 'EOF'
-import json
-import os
-import sys
-from datetime import datetime, timedelta
-
-changelog_file = os.path.expanduser("~/.openclaw/workspace/memory/email-to-calendar/changelog.json")
-undo_window = timedelta(hours=24)
-
-try:
-    with open(changelog_file, 'r') as f:
-        changelog = json.load(f)
-except:
-    sys.exit(1)
-
-now = datetime.now()
-changes = list(reversed(changelog.get('changes', [])))
-
-for change in changes:
-    if not change.get('can_undo', False):
-        continue
-    try:
-        change_time = datetime.fromisoformat(change.get('timestamp', ''))
-        if (now - change_time) < undo_window:
-            print(change.get('id'))
-            sys.exit(0)
-    except:
-        continue
-
-sys.exit(1)
-EOF
-)
+        CHANGE_ID=$(python3 "$UTILS_DIR/undo_ops.py" find-last 2>/dev/null)
         if [ -z "$CHANGE_ID" ]; then
             echo "No undoable changes found." >&2
             exit 1
@@ -85,78 +53,7 @@ EOF
         ;;
 
     list)
-        python3 << 'EOF'
-import json
-import os
-import sys
-from datetime import datetime, timedelta
-
-changelog_file = os.path.expanduser("~/.openclaw/workspace/memory/email-to-calendar/changelog.json")
-undo_window = timedelta(hours=24)
-
-try:
-    with open(changelog_file, 'r') as f:
-        changelog = json.load(f)
-except:
-    print("No changes recorded.")
-    sys.exit(0)
-
-now = datetime.now()
-changes = list(reversed(changelog.get('changes', [])))
-undoable = []
-
-for change in changes:
-    if not change.get('can_undo', False):
-        continue
-    try:
-        change_time = datetime.fromisoformat(change.get('timestamp', ''))
-        if (now - change_time) < undo_window:
-            undoable.append(change)
-    except:
-        continue
-
-if not undoable:
-    print("No undoable changes (all changes are older than 24 hours or already undone).")
-    sys.exit(0)
-
-print(f"Undoable changes ({len(undoable)}):\n")
-
-for i, change in enumerate(undoable, 1):
-    change_id = change.get('id')
-    action = change.get('action')
-    ts = change.get('timestamp', '')
-
-    try:
-        dt = datetime.fromisoformat(ts)
-        ts_str = dt.strftime('%Y-%m-%d %H:%M')
-        time_ago = now - dt
-        hours_ago = time_ago.total_seconds() / 3600
-        if hours_ago < 1:
-            ago_str = f"{int(time_ago.total_seconds() / 60)} minutes ago"
-        else:
-            ago_str = f"{hours_ago:.1f} hours ago"
-    except:
-        ts_str = ts
-        ago_str = ""
-
-    if action == 'create':
-        summary = change.get('after', {}).get('summary', 'Unknown')
-        desc = f"Created \"{summary}\""
-    elif action == 'update':
-        summary = change.get('after', {}).get('summary') or change.get('before', {}).get('summary', 'Unknown')
-        desc = f"Updated \"{summary}\""
-    else:
-        summary = change.get('before', {}).get('summary', 'Unknown')
-        desc = f"Deleted \"{summary}\""
-
-    print(f"{i}. {change_id}")
-    print(f"   {desc}")
-    print(f"   {ago_str}")
-    print()
-
-print("Use 'undo.sh --change-id <id>' to undo a specific change")
-print("or 'undo.sh last' to undo the most recent change.")
-EOF
+        python3 "$UTILS_DIR/undo_ops.py" list
         exit 0
         ;;
 
@@ -304,27 +201,6 @@ case "$ACTION_TYPE" in
 esac
 
 # Mark the change as undone
-python3 << EOF
-import json
-import os
-
-changelog_file = os.path.expanduser("~/.openclaw/workspace/memory/email-to-calendar/changelog.json")
-change_id = "$CHANGE_ID"
-
-try:
-    with open(changelog_file, 'r') as f:
-        changelog = json.load(f)
-except:
-    exit(0)
-
-for change in changelog.get('changes', []):
-    if change.get('id') == change_id:
-        change['can_undo'] = False
-        change['undone_at'] = __import__('datetime').datetime.now().isoformat()
-        break
-
-with open(changelog_file, 'w') as f:
-    json.dump(changelog, f, indent=2)
-EOF
+python3 "$UTILS_DIR/undo_ops.py" mark-undone --change-id "$CHANGE_ID"
 
 echo "Undo complete. Change $CHANGE_ID has been reversed."

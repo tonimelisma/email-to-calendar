@@ -2,6 +2,11 @@
 
 This skill uses **smart onboarding** - it auto-detects your Gmail accounts and calendars, then presents sensible defaults. You can accept all defaults with one click or customize specific settings.
 
+> **Tool Flexibility:** This guide uses `gog` CLI as the reference implementation for
+> Gmail and Google Calendar access. If your agent has alternative tools (MCP servers,
+> other CLIs, or direct API access), those can be used instead - the workflow and
+> configuration concepts remain the same.
+
 ## Quick Start
 
 On first use, the skill will:
@@ -230,10 +235,15 @@ EOF
 ## Prerequisites
 
 This skill requires:
-- `gog` CLI tool installed and authenticated with Google OAuth
+- **Email access** - ability to read unread emails and get message bodies
+- **Calendar access** - ability to create, update, and delete calendar events
 - `jq` for JSON parsing
 - `python3` for date parsing and scripts
 - `bash` for shell scripts
+
+**Reference implementation:** The `gog` CLI tool provides Gmail and Google Calendar
+access. Other tools (MCP servers, direct API) work equally well if they provide
+the same capabilities.
 
 ## Troubleshooting
 

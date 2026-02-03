@@ -4,6 +4,8 @@
 #
 # This removes the event from events.json tracking
 
+SCRIPT_DIR="$(dirname "$0")"
+UTILS_DIR="$SCRIPT_DIR/utils"
 EVENTS_FILE="$HOME/.openclaw/workspace/memory/email-to-calendar/events.json"
 
 # Parse arguments
@@ -32,30 +34,5 @@ if [ ! -f "$EVENTS_FILE" ]; then
     exit 0
 fi
 
-python3 << EOF
-import json
-import sys
-
-events_file = "$EVENTS_FILE"
-event_id = "$EVENT_ID"
-
-try:
-    with open(events_file, 'r') as f:
-        data = json.load(f)
-except (FileNotFoundError, json.JSONDecodeError):
-    print("Warning: Could not read events file", file=sys.stderr)
-    sys.exit(0)
-
-# Find and remove the event
-original_count = len(data.get('events', []))
-data['events'] = [e for e in data.get('events', []) if e.get('event_id') != event_id]
-new_count = len(data['events'])
-
-if original_count == new_count:
-    print(f"Warning: Event {event_id} not found in tracking", file=sys.stderr)
-else:
-    # Save
-    with open(events_file, 'w') as f:
-        json.dump(data, f, indent=2)
-    print(f"Deleted tracked event: {event_id}")
-EOF
+# Delegate to Python implementation
+python3 "$UTILS_DIR/event_tracking.py" delete --event-id "$EVENT_ID"

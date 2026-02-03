@@ -10,6 +10,8 @@
 #   update_invite_status.sh --invite-id inv_20260201_001 --event-title "Valentine's Day" --status created --event-id abc123
 #   update_invite_status.sh --email-id 19c1c86dcc389443 --event-title "Staff Development" --status dismissed
 
+SCRIPT_DIR="$(dirname "$0")"
+UTILS_DIR="$SCRIPT_DIR/utils"
 PENDING_FILE="$HOME/.openclaw/workspace/memory/email-to-calendar/pending_invites.json"
 
 INVITE_ID=""
@@ -75,58 +77,10 @@ if [ ! -f "$PENDING_FILE" ]; then
     exit 1
 fi
 
-# Update the status
-python3 << EOF
-import json
-import sys
-from datetime import datetime
-
-pending_file = "$PENDING_FILE"
-invite_id = "$INVITE_ID"
-email_id = "$EMAIL_ID"
-event_title = "$EVENT_TITLE"
-new_status = "$NEW_STATUS"
-calendar_event_id = "$CALENDAR_EVENT_ID"
-
-try:
-    with open(pending_file, 'r') as f:
-        data = json.load(f)
-except Exception as e:
-    print(f"Error reading file: {e}", file=sys.stderr)
-    sys.exit(1)
-
-updated = False
-for invite in data.get('invites', []):
-    # Match by invite_id or email_id
-    if invite_id and invite.get('id') != invite_id:
-        continue
-    if email_id and invite.get('email_id') != email_id:
-        continue
-
-    # Find and update the event
-    for event in invite.get('events', []):
-        # Match by exact title or partial match
-        if event.get('title') == event_title or event_title.lower() in event.get('title', '').lower():
-            event['status'] = new_status
-            if calendar_event_id:
-                event['event_id'] = calendar_event_id
-            event['updated_at'] = datetime.now().isoformat()
-            updated = True
-            print(f"Updated '{event.get('title')}' to status: {new_status}")
-            break
-
-    if updated:
-        break
-
-if not updated:
-    print(f"Warning: No matching event found for '{event_title}'", file=sys.stderr)
-    sys.exit(1)
-
-# Write back
-try:
-    with open(pending_file, 'w') as f:
-        json.dump(data, f, indent=2)
-except Exception as e:
-    print(f"Error writing file: {e}", file=sys.stderr)
-    sys.exit(1)
-EOF
+# Delegate to Python implementation
+python3 "$UTILS_DIR/invite_ops.py" \
+    --invite-id "$INVITE_ID" \
+    --email-id "$EMAIL_ID" \
+    --event-title "$EVENT_TITLE" \
+    --status "$NEW_STATUS" \
+    --event-id "$CALENDAR_EVENT_ID"
