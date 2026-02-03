@@ -1,9 +1,10 @@
 #!/bin/bash
-# Create or update a calendar event with automatic tracking
+# Create or update a calendar event with automatic tracking and changelog
 # Usage: create_event.sh <calendar_id> <title> <date> <start_time> <end_time> <description> <attendee_email> [event_id] [email_id]
 #
 # If event_id is provided, updates existing event. Otherwise creates new one.
 # Captures the event ID from gog's JSON output and stores it in events.json tracking.
+# Records changes to changelog.json for undo support.
 # Returns the event ID on success for reference.
 
 SCRIPT_DIR="$(dirname "$0")"
@@ -117,8 +118,24 @@ fi
 START_ISO="${ISO_DATE}T${START_PARSED}:00"
 END_ISO="${ISO_DATE}T${END_PARSED}:00"
 
+# Variable to track if this is a new creation (for changelog)
+IS_NEW_EVENT=false
+BEFORE_STATE=""
+
+# Function to get current event state for changelog (before update)
+get_event_state() {
+    local event_id="$1"
+    local cal_id="$2"
+    # Try to get current state from tracking first (faster)
+    local tracked=$("$SCRIPT_DIR/lookup_event.sh" --event-id "$event_id" 2>/dev/null)
+    if [ "$(echo "$tracked" | jq 'length' 2>/dev/null)" -gt 0 ]; then
+        echo "$tracked" | jq -c '.[0] | {summary: .summary, start: .start, end: null}'
+    fi
+}
+
 # Function to create a new event
 create_new_event() {
+    IS_NEW_EVENT=true
     if [ -n "$ATTENDEE_EMAIL" ]; then
         RESULT=$(gog calendar create "$CALENDAR_ID" \
             --summary "$TITLE" \
@@ -142,6 +159,9 @@ create_new_event() {
 
 # Check if this is an update or create
 if [ -n "$EXISTING_EVENT_ID" ]; then
+    # Get before state for changelog
+    BEFORE_STATE=$(get_event_state "$EXISTING_EVENT_ID" "$CALENDAR_ID")
+
     # Update existing event
     echo "Updating existing event: $EXISTING_EVENT_ID" >&2
     if [ -n "$ATTENDEE_EMAIL" ]; then
@@ -166,6 +186,7 @@ if [ -n "$EXISTING_EVENT_ID" ]; then
     if echo "$RESULT" | grep -qiE "404|not found|410|gone|does not exist|deleted"; then
         echo "Event $EXISTING_EVENT_ID no longer exists, removing from tracking and creating new" >&2
         "$SCRIPT_DIR/delete_tracked_event.sh" --event-id "$EXISTING_EVENT_ID"
+        BEFORE_STATE=""  # Clear before state since we're creating new
         # Fall back to creating a new event
         create_new_event
     else
@@ -179,7 +200,7 @@ fi
 # Output the result
 echo "$RESULT"
 
-# Track the event if we have an ID
+# Track the event and log to changelog if we have an ID
 if [ -n "$EVENT_ID" ]; then
     TRACK_ARGS="--event-id \"$EVENT_ID\" --calendar-id \"$CALENDAR_ID\" --summary \"$TITLE\" --start \"$START_ISO\""
     if [ -n "$EMAIL_ID" ]; then
@@ -187,6 +208,36 @@ if [ -n "$EVENT_ID" ]; then
     fi
     eval "$SCRIPT_DIR/track_event.sh" $TRACK_ARGS >&2
     echo "Event ID: $EVENT_ID" >&2
+
+    # Log to changelog for undo support
+    if [ "$IS_NEW_EVENT" = true ]; then
+        # Log create
+        CHANGE_ID=$("$SCRIPT_DIR/changelog.sh" log-create \
+            --event-id "$EVENT_ID" \
+            --calendar-id "$CALENDAR_ID" \
+            --summary "$TITLE" \
+            --start "$START_ISO" \
+            --end "$END_ISO" \
+            --email-id "$EMAIL_ID" 2>/dev/null) || true
+        if [ -n "$CHANGE_ID" ]; then
+            echo "Change logged: $CHANGE_ID (can undo within 24 hours)" >&2
+        fi
+    elif [ -n "$BEFORE_STATE" ]; then
+        # Log update with before/after state
+        AFTER_STATE=$(cat << EOF
+{"summary": "$TITLE", "start": "$START_ISO", "end": "$END_ISO"}
+EOF
+)
+        CHANGE_ID=$("$SCRIPT_DIR/changelog.sh" log-update \
+            --event-id "$EVENT_ID" \
+            --calendar-id "$CALENDAR_ID" \
+            --before-json "$BEFORE_STATE" \
+            --after-json "$AFTER_STATE" \
+            --email-id "$EMAIL_ID" 2>/dev/null) || true
+        if [ -n "$CHANGE_ID" ]; then
+            echo "Change logged: $CHANGE_ID (can undo within 24 hours)" >&2
+        fi
+    fi
 
     # Also update pending_invites.json to mark this event as created
     if [ -n "$EMAIL_ID" ]; then

@@ -1,17 +1,44 @@
 # Email-to-Calendar Setup Guide
 
-This document explains how to configure the email-to-calendar skill for your needs.
+This skill uses **smart onboarding** - it auto-detects your Gmail accounts and calendars, then presents sensible defaults. You can accept all defaults with one click or customize specific settings.
+
+## Quick Start
+
+On first use, the skill will:
+
+1. **Detect your Gmail accounts** via `gog auth status`
+2. **List available calendars** via `gog calendar list`
+3. **Suggest smart defaults** based on your email pattern
+
+You'll see something like:
+
+```
+Here's my suggested configuration (change any you disagree with):
+
+1. Gmail Account: toni@gmail.com ← (detected)
+2. Calendar: primary ← (detected)
+3. Email Mode: Direct (scan your inbox) ← (guessed: personal email)
+4. Attendees: Disabled
+5. Whole-day events: Timed (9 AM - 5 PM)
+6. Multi-day events: Daily recurring
+7. Ignore patterns: (none)
+8. Auto-create patterns: (none)
+9. Email handling: Mark as read only
+
+Type numbers to change (e.g., "3, 7") or press Enter to accept all defaults.
+```
+
+**Just press Enter** to accept all defaults, or type numbers to change specific settings.
 
 ## Configuration File
 
-The skill uses a configuration file at `~/.config/email-to-calendar/config.json`.
+The skill stores settings in `~/.config/email-to-calendar/config.json`.
 
-**On first use, the skill will interactively ask you to configure these settings.**
-
-### Configuration Schema
+### Full Schema
 
 ```json
 {
+  "email_mode": "direct",
   "gmail_account": "your-email@gmail.com",
   "calendar_id": "primary",
   "attendees": {
@@ -29,33 +56,50 @@ The skill uses a configuration file at `~/.config/email-to-calendar/config.json`
   "event_rules": {
     "ignore_patterns": ["fundraiser", "meeting"],
     "auto_create_patterns": ["holiday", "No School"]
+  },
+  "email_handling": {
+    "mark_read": true,
+    "archive": false
   }
 }
 ```
 
 ### Configuration Options
 
-| Setting | Type | Description |
-|---------|------|-------------|
-| `gmail_account` | string | Gmail account to monitor for forwarded emails |
-| `calendar_id` | string | Calendar to create events in (use "primary" for main calendar) |
-| `attendees.enabled` | boolean | Whether to add attendees to created events |
-| `attendees.emails` | string[] | Email addresses to invite as attendees |
-| `whole_day_events.style` | "timed" / "all_day" | How to create whole-day events |
-| `whole_day_events.start_time` | string | Start time for timed whole-day events (HH:MM) |
-| `whole_day_events.end_time` | string | End time for timed whole-day events (HH:MM) |
-| `multi_day_events.style` | "daily_recurring" / "all_day_span" | How to handle multi-day events |
-| `event_rules.ignore_patterns` | string[] | Event types to always skip |
-| `event_rules.auto_create_patterns` | string[] | Event types to create without confirmation |
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `email_mode` | `"direct"` / `"forwarded"` | `"direct"` | Direct scans your inbox; Forwarded only processes forwarded emails |
+| `gmail_account` | string | (auto-detected) | Gmail account to monitor |
+| `calendar_id` | string | `"primary"` | Calendar to create events in |
+| `attendees.enabled` | boolean | `false` | Whether to add attendees to events |
+| `attendees.emails` | string[] | `[]` | Email addresses to invite |
+| `whole_day_events.style` | `"timed"` / `"all_day"` | `"timed"` | How to create whole-day events |
+| `whole_day_events.start_time` | string | `"09:00"` | Start time for timed events |
+| `whole_day_events.end_time` | string | `"17:00"` | End time for timed events |
+| `multi_day_events.style` | `"daily_recurring"` / `"all_day_span"` | `"daily_recurring"` | How to handle multi-day events |
+| `event_rules.ignore_patterns` | string[] | `[]` | Event types to always skip |
+| `event_rules.auto_create_patterns` | string[] | `[]` | Event types to auto-create |
+| `email_handling.mark_read` | boolean | `true` | Mark processed emails as read |
+| `email_handling.archive` | boolean | `false` | Archive processed emails |
+
+### Email Mode Detection
+
+The skill guesses the best mode based on your email pattern:
+
+| Email Pattern | Suggested Mode | Reason |
+|---------------|----------------|--------|
+| `firstname.lastname@gmail.com` | Direct | Personal inbox |
+| `firstname@gmail.com` | Direct | Personal inbox |
+| `service@*`, `bot@*`, `agent@*` | Forwarded | Service/agent account |
 
 ### Event Style Options
 
 **Whole-day Events:**
-- `"timed"`: Creates events with specific times (e.g., 9 AM - 5 PM)
+- `"timed"`: Creates events 9 AM - 5 PM (or custom times)
 - `"all_day"`: Creates Google Calendar all-day events
 
 **Multi-day Events (e.g., Feb 2-6):**
-- `"daily_recurring"`: Creates separate timed events for each day
+- `"daily_recurring"`: Creates separate 9-5 events for each day
 - `"all_day_span"`: Creates a single event spanning all days
 
 ## Example Configurations
@@ -64,6 +108,7 @@ The skill uses a configuration file at `~/.config/email-to-calendar/config.json`
 
 ```json
 {
+  "email_mode": "direct",
   "gmail_account": "family@gmail.com",
   "calendar_id": "primary",
   "attendees": {
@@ -81,6 +126,10 @@ The skill uses a configuration file at `~/.config/email-to-calendar/config.json`
   "event_rules": {
     "ignore_patterns": ["fundraiser", "PTA meeting", "volunteer request"],
     "auto_create_patterns": ["No School", "holiday", "Staff Development Day"]
+  },
+  "email_handling": {
+    "mark_read": true,
+    "archive": false
   }
 }
 ```
@@ -89,6 +138,7 @@ The skill uses a configuration file at `~/.config/email-to-calendar/config.json`
 
 ```json
 {
+  "email_mode": "direct",
   "gmail_account": "work@company.com",
   "calendar_id": "primary",
   "attendees": {
@@ -106,14 +156,19 @@ The skill uses a configuration file at `~/.config/email-to-calendar/config.json`
   "event_rules": {
     "ignore_patterns": ["newsletter", "announcement"],
     "auto_create_patterns": ["deadline", "review"]
+  },
+  "email_handling": {
+    "mark_read": true,
+    "archive": true
   }
 }
 ```
 
-### Personal Calendar (Minimal Config)
+### Personal Calendar (Minimal)
 
 ```json
 {
+  "email_mode": "direct",
   "gmail_account": "personal@gmail.com",
   "calendar_id": "primary",
   "attendees": {
@@ -121,9 +176,7 @@ The skill uses a configuration file at `~/.config/email-to-calendar/config.json`
     "emails": []
   },
   "whole_day_events": {
-    "style": "all_day",
-    "start_time": "09:00",
-    "end_time": "17:00"
+    "style": "all_day"
   },
   "multi_day_events": {
     "style": "all_day_span"
@@ -131,23 +184,28 @@ The skill uses a configuration file at `~/.config/email-to-calendar/config.json`
   "event_rules": {
     "ignore_patterns": [],
     "auto_create_patterns": []
+  },
+  "email_handling": {
+    "mark_read": true,
+    "archive": false
   }
 }
 ```
 
 ## Manual Configuration
 
-If you prefer to create the config manually instead of using the first-run wizard:
+If you prefer to skip the interactive setup:
 
 ```bash
 mkdir -p ~/.config/email-to-calendar
 cat > ~/.config/email-to-calendar/config.json << 'EOF'
 {
+  "email_mode": "direct",
   "gmail_account": "your-email@gmail.com",
   "calendar_id": "primary",
   "attendees": {
-    "enabled": true,
-    "emails": ["attendee@example.com"]
+    "enabled": false,
+    "emails": []
   },
   "whole_day_events": {
     "style": "timed",
@@ -160,6 +218,10 @@ cat > ~/.config/email-to-calendar/config.json << 'EOF'
   "event_rules": {
     "ignore_patterns": [],
     "auto_create_patterns": []
+  },
+  "email_handling": {
+    "mark_read": true,
+    "archive": false
   }
 }
 EOF
@@ -170,19 +232,33 @@ EOF
 This skill requires:
 - `gog` CLI tool installed and authenticated with Google OAuth
 - `jq` for JSON parsing
-- `python3` for event extraction scripts
+- `python3` for date parsing and scripts
 - `bash` for shell scripts
 
 ## Troubleshooting
 
 ### Config not found
-If you see "Configuration not found. Setup required." - the skill will guide you through interactive setup.
+The skill will auto-detect and suggest defaults. Just accept or customize.
 
 ### Events not being created
-- Check that `gog` is authenticated: `gog auth status`
-- Verify calendar ID is correct: `gog calendar list`
-- Check config file permissions: `ls -la ~/.config/email-to-calendar/`
+1. Check that `gog` is authenticated: `gog auth status`
+2. Verify calendar ID is correct: `gog calendar list`
+3. Check config file: `cat ~/.config/email-to-calendar/config.json`
 
 ### Wrong calendar
-List available calendars: `gog calendar list`
-Update `calendar_id` in config to use a specific calendar ID.
+List available calendars:
+```bash
+gog calendar list
+```
+Update `calendar_id` in config to use a specific calendar.
+
+### See what was processed
+```bash
+~/.openclaw/workspace/skills/email-to-calendar/scripts/activity_log.sh show --last 5
+```
+
+### Undo a recent event
+```bash
+~/.openclaw/workspace/skills/email-to-calendar/scripts/undo.sh list
+~/.openclaw/workspace/skills/email-to-calendar/scripts/undo.sh last
+```

@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.6.0] - 2026-02-02
+
+### Added
+- **Smart Onboarding**: Auto-detects Gmail accounts and calendars, presents all 9 settings with smart defaults. User can accept all with Enter or change specific items by number.
+- **Silent Activity Log**: All processing activity logged to `activity.json`. Users can ask "what did you skip?" or "show me activity" to see what happened. New script `activity_log.sh`.
+- **Event Changelog with Undo**: All calendar changes logged to `changelog.json`. Changes can be undone within 24 hours. New scripts `changelog.sh` and `undo.sh`.
+- **Day-of-Week Display**: Events now show day of week for verification (e.g., "Feb 12, Wednesday").
+- **LLM-Based Duplicate Matching**: Semantic matching for duplicates instead of simple keyword matching. Explains updates to user.
+- **Recurring Event Detection**: Detects patterns like "Every Tuesday at 3pm" and creates appropriate RRULE.
+- **Batched Reminders with Dismissal Tracking**: Pending invites are batched, track reminder_count, auto-dismiss after 3 ignored reminders.
+- **Orphaned Event Cleanup**: `--validate` flag on `lookup_event.sh` checks if events still exist in calendar and removes orphaned tracking entries.
+
+### Changed
+- **Email Search Strategy**: Removed `newer_than:1d` filter to catch stale forwards (old emails forwarded today). Now processes all unread emails and relies on "already processed" check.
+- **create_event.sh**: Now logs changes to changelog.json for undo support, captures before/after state for updates.
+- **lookup_event.sh**: Added `--validate` flag for orphan cleanup on 404/410.
+- **list_pending.sh**: Added `--update-reminded` and `--auto-dismiss` flags, shows day-of-week, tracks reminder_count.
+- **SKILL.md**: Major rewrite with smart onboarding flow, activity logging, changelog/undo documentation, LLM matching guidance, recurring event detection.
+- **SETUP.md**: Simplified to reflect smart defaults approach.
+
+### Fixed
+- Stale forward handling: Old emails forwarded today are now properly processed.
+- Orphaned events: Events deleted in Google Calendar are now automatically removed from tracking.
+
 ## [1.5.0] - 2026-02-02
 
 ### Added

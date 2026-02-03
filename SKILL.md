@@ -1,39 +1,84 @@
 ---
 name: email-to-calendar
-version: 1.5.0
-description: Extract calendar events from emails and create calendar entries. Supports two modes: (1) Direct inbox monitoring - scans all emails for events, or (2) Forwarded emails - processes emails you forward to a dedicated address. Features event tracking, pending invite reminders via heartbeat.
+version: 1.6.0
+description: Extract calendar events from emails and create calendar entries. Supports two modes: (1) Direct inbox monitoring - scans all emails for events, or (2) Forwarded emails - processes emails you forward to a dedicated address. Features smart onboarding, event tracking, pending invite reminders, undo support, and silent activity logging.
 ---
 
-> **⚠️ CRITICAL RULES — READ BEFORE PROCESSING ANY EMAIL**
+> **CRITICAL RULES - READ BEFORE PROCESSING ANY EMAIL**
 >
-> 1. **ALWAYS ASK BEFORE CREATING** — Never create calendar events without explicit user confirmation in the current conversation
-> 2. **CHECK IF ALREADY PROCESSED** — Before processing any email, check `processed_emails` in index.json
-> 3. **READ CONFIG FIRST** — Load and apply `ignore_patterns` and `auto_create_patterns` before presenting events
-> 4. **READ MEMORY.MD** — Check for user preferences stored from previous sessions
-> 5. **INCLUDE ALL CONFIGURED ATTENDEES** — When creating/updating/deleting events, always include attendees from config with `--attendees` flag (and `--send-updates all` if supported)
-> 6. **CHECK TRACKED EVENTS FIRST** — Use `lookup_event.sh --email-id` to find existing events before calendar search (faster, more reliable)
-> 7. **TRACK ALL CREATED EVENTS** — The `create_event.sh` script automatically tracks events; use tracked IDs for updates/deletions
+> 1. **ALWAYS ASK BEFORE CREATING** - Never create calendar events without explicit user confirmation in the current conversation
+> 2. **CHECK IF ALREADY PROCESSED** - Before processing any email, check `processed_emails` in index.json
+> 3. **READ CONFIG FIRST** - Load and apply `ignore_patterns` and `auto_create_patterns` before presenting events
+> 4. **READ MEMORY.MD** - Check for user preferences stored from previous sessions
+> 5. **INCLUDE ALL CONFIGURED ATTENDEES** - When creating/updating/deleting events, always include attendees from config with `--attendees` flag (and `--send-updates all` if supported)
+> 6. **CHECK TRACKED EVENTS FIRST** - Use `lookup_event.sh --email-id` to find existing events before calendar search (faster, more reliable)
+> 7. **TRACK ALL CREATED EVENTS** - The `create_event.sh` script automatically tracks events; use tracked IDs for updates/deletions
+> 8. **SHOW DAY-OF-WEEK** - Always include the day of week when presenting events for user verification
 
 # Email to Calendar Skill
 
-Extract calendar events and action items from emails, present them for review, and create/update calendar events with duplicate detection.
+Extract calendar events and action items from emails, present them for review, and create/update calendar events with duplicate detection and undo support.
 
-## First-Run Setup
+## First-Run Setup: Smart Onboarding
 
 **Before first use, check if configuration exists:**
 
 ```bash
 CONFIG_FILE="$HOME/.config/email-to-calendar/config.json"
 if [ ! -f "$CONFIG_FILE" ]; then
-    echo "Configuration not found. Setup required."
+    echo "Configuration not found. Running smart setup..."
 fi
 ```
 
-**If no config exists, ask the user these questions:**
+### Smart Defaults with Auto-Detection
+
+Instead of asking 9 questions one by one, **detect what's available and suggest smart defaults**:
+
+```bash
+# Step 1: Discover what's available
+GMAIL_ACCOUNTS=$(gog auth status 2>/dev/null | grep -E "@gmail|@googlemail" | head -1)
+CALENDARS=$(gog calendar list 2>/dev/null)
+```
+
+**Email mode suggestion based on email pattern:**
+
+| Email Pattern | Suggested Default | Reason |
+|---------------|-------------------|--------|
+| firstname.lastname@gmail.com | Direct | Likely user's personal inbox |
+| firstname@gmail.com | Direct | Likely user's personal |
+| service@*, bot@*, agent@* | Forwarded | Likely agent/service account |
+| Generic/organizational | Direct | Best guess |
+
+**Present all settings with defaults shown:**
+
+```
+Here's my suggested configuration (change any you disagree with):
+
+1. Gmail Account: toni@gmail.com ← (detected)
+2. Calendar: primary ← (detected)
+3. Email Mode: Direct (scan your inbox) ← (guessed: personal email)
+4. Attendees: Disabled
+5. Whole-day events: Timed (9 AM - 5 PM)
+6. Multi-day events: Daily recurring
+7. Ignore patterns: (none)
+8. Auto-create patterns: (none)
+9. Email handling: Mark as read only
+
+Type numbers to change (e.g., "3, 7") or press Enter to accept all defaults.
+```
+
+**User can:**
+- Press Enter → Accept all defaults
+- Type "3" → Change just email mode
+- Type "3, 7, 8" → Change those three
+
+**If no user response** (timeout or interrupted): Use defaults silently and proceed.
+
+### Configuration Questions (when defaults need changing)
 
 1. **Email Monitoring Mode:** "How should I find emails with events?"
-   - Option A: **Direct access** — "I monitor your real inbox. I'll scan emails and find ones containing events."
-   - Option B: **Forwarded emails** — "I have my own email address. You forward emails with events to me."
+   - Option A: **Direct access** - "I monitor your real inbox. I'll scan emails and find ones containing events."
+   - Option B: **Forwarded emails** - "I have my own email address. You forward emails with events to me."
 
 2. **Gmail Account:** "Which Gmail account should I monitor for emails?"
 
@@ -42,12 +87,10 @@ fi
 4. **Attendees:** "Should I add attendees to events? If yes, which email addresses? (comma-separated)"
 
 5. **Whole-day Event Style:**
-   - "For whole-day events (like school holidays), how should I create them?"
    - Option A: Timed events (e.g., 9 AM - 5 PM)
    - Option B: All-day events (no specific time)
 
 6. **Multi-day Event Style:**
-   - "For multi-day events (e.g., Feb 2-6), how should I create them?"
    - Option A: Daily recurring events (one 9-5 event each day)
    - Option B: Single spanning event (one event across all days)
 
@@ -55,7 +98,7 @@ fi
 
 8. **Auto-create Patterns (optional):** "Are there event types I should always create without asking? (comma-separated, e.g., No School, holiday)"
 
-9. **Email Handling After Processing:** "After processing an email, what should I do with it?"
+9. **Email Handling After Processing:**
    - Option A: Mark as read only
    - Option B: Mark as read and archive
    - Option C: Leave as-is (don't modify the email)
@@ -119,8 +162,11 @@ gog gmail get <messageId> --account "$GMAIL_ACCOUNT"
 
 ### Search with body content included
 ```bash
-gog gmail messages search "in:inbox newer_than:1d" --max 5 --include-body --account "$GMAIL_ACCOUNT"
+# Use is:unread without date filter to catch forwarded old emails
+gog gmail messages search "in:inbox is:unread" --max 20 --include-body --account "$GMAIL_ACCOUNT"
 ```
+
+**Note on stale forwards:** Don't use `newer_than:1d` because it checks the email's original date header, not when it was received. If a user forwards a week-old email today, it may be missed. Instead, process all UNREAD emails and rely on the "already processed" check to prevent duplicates.
 
 ### Common Mistakes to Avoid
 - WRONG: `gog gmail messages get <id>` - This command does not exist!
@@ -133,6 +179,12 @@ gog gmail messages search "in:inbox newer_than:1d" --max 5 --include-body --acco
 
 Before processing ANY email, perform these checks:
 
+#### Start activity logging session:
+```bash
+SCRIPTS_DIR="$HOME/.openclaw/workspace/skills/email-to-calendar/scripts"
+"$SCRIPTS_DIR/activity_log.sh" start-session
+```
+
 #### Determine the email mode:
 ```bash
 CONFIG_FILE="$HOME/.config/email-to-calendar/config.json"
@@ -140,10 +192,10 @@ EMAIL_MODE=$(jq -r '.email_mode // "forwarded"' "$CONFIG_FILE")
 ```
 
 #### For DIRECT mode:
-- Scan ALL unread emails (or last 24 hours)
+- Scan ALL unread emails (not date-filtered, to catch forwarded old emails)
 - For each email, check if it contains event indicators (dates, times, meeting keywords)
 - Only process emails that have event content
-- Most emails will be skipped
+- Most emails will be skipped (log silently with activity_log.sh)
 
 #### For FORWARDED mode:
 - Only look for emails with forwarded indicators (Fwd:, forwarded message headers)
@@ -158,7 +210,11 @@ EMAIL_ID="<the email message ID>"
 # Check if this email ID was already processed
 if jq -e ".extractions[] | select(.email_id == \"$EMAIL_ID\")" "$INDEX_FILE" > /dev/null 2>&1; then
     echo "EMAIL ALREADY PROCESSED - SKIP"
-    # Do NOT process this email again
+    # Log the skip silently
+    "$SCRIPTS_DIR/activity_log.sh" log-skip \
+        --email-id "$EMAIL_ID" \
+        --subject "Subject line" \
+        --reason "Already processed"
     exit 0
 fi
 ```
@@ -184,7 +240,8 @@ fi
 
 #### DIRECT mode:
 ```bash
-gog gmail messages search "in:inbox is:unread newer_than:1d" --max 20 --include-body --account "$GMAIL_ACCOUNT"
+# Don't use newer_than filter - it checks original date, not received date
+gog gmail messages search "in:inbox is:unread" --max 20 --include-body --account "$GMAIL_ACCOUNT"
 ```
 
 Check each email for event indicators:
@@ -193,7 +250,14 @@ Check each email for event indicators:
 - Event keywords (meeting, appointment, deadline, holiday)
 - .ics attachments
 
-**Only proceed for emails with event content.**
+**Only proceed for emails with event content. Log skips silently:**
+
+```bash
+"$SCRIPTS_DIR/activity_log.sh" log-skip \
+    --email-id "$EMAIL_ID" \
+    --subject "Weekly Newsletter" \
+    --reason "No event indicators found"
+```
 
 #### FORWARDED mode:
 ```bash
@@ -217,7 +281,7 @@ In direct mode, you'll see many emails. Use these heuristics:
 - .ics attachment
 - From event sources (Eventbrite, Meetup, school newsletters)
 
-**Skip these:**
+**Skip these (log silently):**
 - Marketing/promotional
 - Receipts (unless delivery dates needed)
 - Social notifications
@@ -243,9 +307,17 @@ Read the email content and extract events as structured data. **Do NOT use any e
 For each potential event, identify:
 - **title**: Descriptive event name (max 80 chars)
 - **date**: The date(s) of the event
+- **day_of_week**: The day of week (for verification)
 - **time**: Start/end times if specified (default: 9 AM - 5 PM)
 - **is_multi_day**: Whether it spans multiple days
+- **is_recurring**: Whether it repeats (and pattern if so)
 - **confidence**: high/medium/low based on context clarity
+
+**Recurring event detection:**
+- "Every Tuesday at 3pm" → Create with `RRULE:FREQ=WEEKLY;BYDAY=TU`
+- "Weekly team meeting" → Ask "Is this recurring?"
+- "Monthly on the 15th" → `RRULE:FREQ=MONTHLY;BYMONTHDAY=15`
+- "First Monday of each month" → `RRULE:FREQ=MONTHLY;BYDAY=1MO`
 
 Also extract any action items with optional deadlines.
 
@@ -295,7 +367,7 @@ EOF
 
 ### 5. Present Items to User and WAIT for Response
 
-**⚠️ THIS STEP IS MANDATORY — NEVER SKIP**
+**THIS STEP IS MANDATORY - NEVER SKIP**
 
 First, apply event rules from config:
 ```bash
@@ -315,24 +387,24 @@ for event in events:
     mark as "PENDING"
 ```
 
-Present ALL items to the user with numbered selection:
+**Present ALL items to the user with numbered selection and day-of-week:**
 
 **Example presentation:**
 > I found the following potential events:
 >
-> 1. ~~ELAC Meeting (Feb 2 at 8:15 AM)~~ - SKIP (matches ignore pattern)
+> 1. ~~ELAC Meeting (Feb 2, Monday at 8:15 AM)~~ - SKIP (matches ignore pattern)
 > 2. ~~WCEF Fundraiser (Feb 2-6)~~ - SKIP (matches ignore pattern)
-> 3. **Team Offsite (Feb 2-6)** - PENDING
-> 4. **Classroom Valentine's Day (Feb 11)** - AUTO-CREATE
-> 5. **Staff Development Day - No School (Feb 12)** - AUTO-CREATE
-> 6. **President's Day Weekend - No School (Feb 13-16)** - AUTO-CREATE
-> 7. ~~PTA Meeting (Feb 19 at 7 PM)~~ - SKIP (matches ignore pattern)
-> 8. **Copyright Notice (Jan 1, 2026)** - PENDING *(likely false positive)*
+> 3. **Team Offsite (Feb 2-6, Sun-Thu)** - PENDING
+> 4. **Classroom Valentine's Day (Feb 11, Tuesday)** - AUTO-CREATE
+> 5. **Staff Development Day - No School (Feb 12, Wednesday)** - AUTO-CREATE
+> 6. **President's Day Weekend - No School (Feb 13-16, Thu-Sun)** - AUTO-CREATE
+> 7. ~~PTA Meeting (Feb 19, Wednesday at 7 PM)~~ - SKIP (matches ignore pattern)
+> 8. **Copyright Notice (Jan 1, 2026, Wednesday)** - PENDING *(likely false positive)*
 >
 > Reply with the numbers you want to create (e.g., '3, 4, 5, 6'), 'all', or 'none'.
 > *(Items marked SKIP are excluded. AUTO-CREATE items are pre-selected.)*
 
-**⏸️ STOP AND WAIT for user response.**
+**STOP AND WAIT for user response.**
 
 User can respond with:
 - Specific numbers: `3, 4, 5, 6` → Create only those items
@@ -379,7 +451,8 @@ invite = {
         # {"title": "Valentine's Day", "date": "2026-02-11", "time": "09:00-17:00", "status": "pending"}
     ],
     "presented_at": datetime.now().isoformat(),
-    "last_reminded": None
+    "last_reminded": None,
+    "reminder_count": 0
 }
 
 data['invites'].append(invite)
@@ -414,14 +487,23 @@ SCRIPTS_DIR="$HOME/.openclaw/workspace/skills/email-to-calendar/scripts"
 - `created` - User selected and calendar event was created
 - `dismissed` - User explicitly declined this event
 - `expired` - Event date has passed (auto-set by heartbeat)
+- `auto_dismissed` - Auto-dismissed after 3 ignored reminders
 
 **IMPORTANT:** If the conversation ends without user response, events stay `pending` and will be resurfaced during heartbeat cycles.
 
-### 6. Check for Duplicates (MANDATORY)
+### 5.3 End Activity Session
 
-**⚠️ THIS IS A HARD REQUIREMENT — ALWAYS DO THIS BEFORE CREATING ANY EVENT**
+After processing, finalize the activity log:
 
-For EACH event to be created, first check tracked events, then fall back to calendar search:
+```bash
+"$SCRIPTS_DIR/activity_log.sh" end-session
+```
+
+### 6. Check for Duplicates (MANDATORY - Use LLM Matching)
+
+**THIS IS A HARD REQUIREMENT - ALWAYS DO THIS BEFORE CREATING ANY EVENT**
+
+For EACH event to be created, first check tracked events, then use LLM for semantic matching:
 
 ```bash
 SCRIPTS_DIR="$HOME/.openclaw/workspace/skills/email-to-calendar/scripts"
@@ -450,6 +532,29 @@ if [ -z "$EXISTING_EVENT_ID" ]; then
         --to "${EVENT_DATE}T23:59:59" \
         --json
 fi
+```
+
+#### LLM-Based Fuzzy Matching
+
+When comparing events, use semantic understanding rather than simple keyword matching:
+
+| Existing Event | New Email | LLM Decision |
+|----------------|-----------|--------------|
+| "Team Offsite" (all day) | "Team Offsite 5-6pm" | Update existing, add specific time |
+| "Q1 Planning" | "Q1 Planning Meeting" | Same event, update |
+| "Dentist" Feb 10 | "Dentist appointment" Feb 10 | Same event |
+| "Team Lunch" | "Team Dinner" | Different events |
+
+**Surfacing updates to user:**
+```
+"Staff Development Day" already exists as an all-day event on Feb 12.
+The email specifies 2-4pm. Updating to 2:00 PM - 4:00 PM.
+```
+
+```
+Found existing "Q1 Planning" on March 1.
+Email has updated location: "Conference Room B"
+→ Updating event.
 ```
 
 **Decision logic:**
@@ -489,12 +594,12 @@ gog calendar update "$CALENDAR_ID" "$EXISTING_EVENT_ID" \
 
 #### Using create_event.sh (Recommended)
 
-The `create_event.sh` script handles date parsing, time formatting, and **automatic event tracking**:
+The `create_event.sh` script handles date parsing, time formatting, **automatic event tracking**, and **changelog for undo**:
 
 ```bash
 SCRIPTS_DIR="$HOME/.openclaw/workspace/skills/email-to-calendar/scripts"
 
-# Create new event (automatically tracked)
+# Create new event (automatically tracked and logged)
 "$SCRIPTS_DIR/create_event.sh" \
     "$CALENDAR_ID" \
     "Event Title" \
@@ -524,6 +629,7 @@ The script:
 - Parses time formats (e.g., "9:00 AM", "14:30")
 - Outputs the event ID on success
 - Automatically calls `track_event.sh` to store the event in tracking
+- Logs changes to `changelog.json` for undo support (can undo within 24 hours)
 
 #### Direct gog commands (for advanced use)
 
@@ -588,7 +694,9 @@ Uses standard RFC 5545 RRULE syntax:
 | Daily (forever) | `RRULE:FREQ=DAILY` |
 | Weekly | `RRULE:FREQ=WEEKLY` |
 | Every weekday | `RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR` |
+| Every Tuesday | `RRULE:FREQ=WEEKLY;BYDAY=TU` |
 | Monthly on specific day | `RRULE:FREQ=MONTHLY;BYMONTHDAY=19` |
+| First Monday of month | `RRULE:FREQ=MONTHLY;BYDAY=1MO` |
 | Yearly | `RRULE:FREQ=YEARLY` |
 | Until a date | `RRULE:FREQ=WEEKLY;UNTIL=20261231T235959Z` |
 
@@ -684,6 +792,84 @@ fi
 jq ".extractions |= map(if .file == \"$EXTRACTION_FILE\" then .email_id = \"$EMAIL_ID\" | .status = \"processed\" else . end)" "$INDEX_FILE" > tmp.json && mv tmp.json "$INDEX_FILE"
 ```
 
+## Activity Log (Silent Audit Trail)
+
+All processing activity is logged silently to `activity.json`. Users can ask "what did you skip?" or "show me activity" to see what happened.
+
+### Using Activity Log
+
+```bash
+SCRIPTS_DIR="$HOME/.openclaw/workspace/skills/email-to-calendar/scripts"
+
+# Start a session before processing
+"$SCRIPTS_DIR/activity_log.sh" start-session
+
+# Log skipped emails
+"$SCRIPTS_DIR/activity_log.sh" log-skip \
+    --email-id "abc123" \
+    --subject "Weekly Newsletter" \
+    --reason "No event indicators found"
+
+# Log extracted events
+"$SCRIPTS_DIR/activity_log.sh" log-event \
+    --email-id "def456" \
+    --title "Staff Development Day" \
+    --action created
+
+# End session (saves to activity.json)
+"$SCRIPTS_DIR/activity_log.sh" end-session
+
+# Show recent activity (on user request)
+"$SCRIPTS_DIR/activity_log.sh" show --last 3
+```
+
+### Activity Log Location
+
+`~/.openclaw/workspace/memory/email-to-calendar/activity.json`
+
+## Event Changelog and Undo
+
+All calendar changes are logged to `changelog.json` for audit trail and undo support.
+
+### Viewing Changes
+
+```bash
+SCRIPTS_DIR="$HOME/.openclaw/workspace/skills/email-to-calendar/scripts"
+
+# List recent changes
+"$SCRIPTS_DIR/changelog.sh" list --last 10
+
+# Get specific change details
+"$SCRIPTS_DIR/changelog.sh" get --change-id "chg_20260202_143000_001"
+
+# Check if change can be undone
+"$SCRIPTS_DIR/changelog.sh" can-undo --change-id "chg_20260202_143000_001"
+```
+
+### Undoing Changes
+
+Changes can be undone within 24 hours:
+
+```bash
+# Undo the most recent change
+"$SCRIPTS_DIR/undo.sh" last
+
+# Undo a specific change
+"$SCRIPTS_DIR/undo.sh" --change-id "chg_20260202_143000_001"
+
+# List undoable changes
+"$SCRIPTS_DIR/undo.sh" list
+```
+
+**Undo behavior:**
+- **Create** → Deletes the event
+- **Update** → Restores the previous state
+- **Delete** → Recreates the event (if within time window)
+
+### Changelog Location
+
+`~/.openclaw/workspace/memory/email-to-calendar/changelog.json`
+
 ## Event Creation Rules
 
 ### Date/Time Handling
@@ -695,6 +881,7 @@ jq ".extractions |= map(if .file == \"$EXTRACTION_FILE\" then .email_id = \"$EMA
 
 ### Event Details
 - **Subject/Title**: Create descriptive, concise titles (max 80 chars)
+- **Day-of-week**: Always include for user verification
 - **Description**: Include:
   - Full context from the email
   - Any action items or preparation needed
@@ -704,7 +891,7 @@ jq ".extractions |= map(if .file == \"$EXTRACTION_FILE\" then .email_id = \"$EMA
 ### Duplicate Detection
 Consider it a duplicate if:
 - Same date AND
-- Similar title (2+ keywords match) AND
+- Similar title (use LLM semantic matching, not just keyword matching) AND
 - Overlapping time (within 1 hour)
 
 Always update existing events rather than creating duplicates.
@@ -754,6 +941,8 @@ Present the items and ask which to process.
 - **Index**: `~/.openclaw/workspace/memory/email-extractions/index.json`
 - **Event Tracking**: `~/.openclaw/workspace/memory/email-to-calendar/events.json`
 - **Pending Invites**: `~/.openclaw/workspace/memory/email-to-calendar/pending_invites.json`
+- **Activity Log**: `~/.openclaw/workspace/memory/email-to-calendar/activity.json`
+- **Changelog**: `~/.openclaw/workspace/memory/email-to-calendar/changelog.json`
 - **Scripts**: `~/.openclaw/workspace/skills/email-to-calendar/scripts/`
 - **Memory**: `~/.openclaw/workspace/skills/email-to-calendar/MEMORY.md`
 
@@ -795,6 +984,9 @@ Located at `~/.openclaw/workspace/memory/email-to-calendar/events.json`:
 
 # List all tracked events
 ./scripts/lookup_event.sh --list
+
+# Validate events still exist in calendar (removes orphans)
+./scripts/lookup_event.sh --email-id "19c1c86dcc389443" --validate
 ```
 
 #### Track a new event (called automatically by create_event.sh)
@@ -816,6 +1008,14 @@ Located at `~/.openclaw/workspace/memory/email-to-calendar/events.json`:
 ```bash
 ./scripts/delete_tracked_event.sh --event-id "abc123xyz"
 ```
+
+### Self-Healing: Orphaned Event Cleanup
+
+If a user deletes an event directly in Google Calendar, the tracking file becomes stale. The system handles this automatically:
+
+- **On update attempt**: If `create_event.sh` gets a 404/410 when updating, it removes the stale entry and creates a new event
+- **On lookup with --validate**: `lookup_event.sh --validate` checks if events still exist and removes orphaned entries
+- **Any 404/410 response**: All scripts handle gracefully by removing the orphaned tracking entry
 
 ### Using Tracking for Duplicate Detection
 
@@ -906,7 +1106,8 @@ Located at `~/.openclaw/workspace/memory/email-to-calendar/pending_invites.json`
         }
       ],
       "presented_at": "2026-02-01T21:15:00",
-      "last_reminded": null
+      "last_reminded": null,
+      "reminder_count": 0
     }
   ]
 }
@@ -919,8 +1120,14 @@ Located at `~/.openclaw/workspace/memory/email-to-calendar/pending_invites.json`
 # JSON output (programmatic)
 ./scripts/list_pending.sh
 
-# Human-readable summary
+# Human-readable summary with day-of-week
 ./scripts/list_pending.sh --summary
+
+# Update reminder tracking (increment counter)
+./scripts/list_pending.sh --summary --update-reminded
+
+# Auto-dismiss after 3 ignored reminders
+./scripts/list_pending.sh --summary --auto-dismiss
 ```
 
 #### Update invite status
@@ -939,14 +1146,38 @@ Located at `~/.openclaw/workspace/memory/email-to-calendar/pending_invites.json`
     --status dismissed
 ```
 
+### Batched Reminders
+
+Pending invites are presented in a batched format:
+
+```
+You have 3 pending calendar invites:
+
+1. Valentine's Party - Feb 11 (Tuesday)
+   From: School Newsletter
+2. Staff Development - Feb 12 (Wednesday)
+   From: School Newsletter
+3. Team Offsite - Feb 15-17 (Sat-Mon)
+   From: Work Email
+
+Reply with numbers to create, 'all', or 'none' to dismiss.
+```
+
+### Reminder Behavior
+
+- **One batched reminder per heartbeat cycle, max**
+- Events with past dates are automatically marked as `expired`
+- After user says "none" → Mark all as dismissed, don't remind again
+- If user ignores reminder → Track `last_reminded` timestamp
+- Don't re-remind within 24 hours of being ignored
+- After 3 ignored reminders → Auto-dismiss and stop asking (use `--auto-dismiss` flag)
+
 ### Heartbeat Integration
 
 Pending invites are automatically checked during heartbeat cycles (see `HEARTBEAT.md`). The heartbeat will:
-1. Run `list_pending.sh --summary` to find unactioned events
+1. Run `list_pending.sh --summary --update-reminded --auto-dismiss` to find unactioned events
 2. Present them to the user with the same numbered selection UI
 3. Update statuses based on user response
-
-Events with past dates are automatically marked as `expired` and excluded from reminders.
 
 ## Example Usage
 
@@ -958,16 +1189,18 @@ Events with past dates are automatically marked as `expired` and excluded from r
 > Feb 19: Monthly Meeting 7 PM
 
 **Your response:**
-1. Check if email was already processed (Step 0)
-2. Read email body using `gog gmail get <messageId>`
-3. Extract items:
-   - Event: "Team Offsite" - Feb 2-6 (5 days)
-   - Event: "Valentine's Day Celebrations" - Feb 11 (single day)
-   - Event: "Monthly Meeting" - Feb 19 at 7 PM
-4. **Present to user and WAIT for confirmation** (Step 5)
-5. Check calendar for duplicates (Step 6)
-6. Create events (Step 7)
-7. Handle processed email (Step 9)
+1. Start activity session (Step 0)
+2. Check if email was already processed (Step 0)
+3. Read email body using `gog gmail get <messageId>`
+4. Extract items with day-of-week:
+   - Event: "Team Offsite" - Feb 2-6 (Sun-Thu, 5 days)
+   - Event: "Valentine's Day Celebrations" - Feb 11 (Tuesday)
+   - Event: "Monthly Meeting" - Feb 19 (Wednesday) at 7 PM
+5. **Present to user and WAIT for confirmation** (Step 5)
+6. Check calendar for duplicates using LLM matching (Step 6)
+7. Create events with changelog (Step 7)
+8. Handle processed email (Step 9)
+9. End activity session
 
 ```bash
 # Read config
