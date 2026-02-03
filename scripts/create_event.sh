@@ -187,4 +187,13 @@ if [ -n "$EVENT_ID" ]; then
     fi
     eval "$SCRIPT_DIR/track_event.sh" $TRACK_ARGS >&2
     echo "Event ID: $EVENT_ID" >&2
+
+    # Also update pending_invites.json to mark this event as created
+    if [ -n "$EMAIL_ID" ]; then
+        "$SCRIPT_DIR/update_invite_status.sh" \
+            --email-id "$EMAIL_ID" \
+            --event-title "$TITLE" \
+            --status created \
+            --event-id "$EVENT_ID" 2>/dev/null || true
+    fi
 fi

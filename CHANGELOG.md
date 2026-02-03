@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.5.0] - 2026-02-02
+
+### Added
+- **Pending Invites Reminder System**: Events that aren't actioned immediately are tracked and resurfaced during heartbeat cycles
+- **pending_invites.json**: New tracking file for undispositioned events with status tracking (pending/created/dismissed/expired)
+- **list_pending.sh**: Script to list all pending invites (JSON or human-readable summary)
+- **update_invite_status.sh**: Script to update event status after user decisions
+- **BOOT.md**: Self-bootstrapping instructions for ClawHub installations
+- **HEARTBEAT.md integration**: Pending invites are checked during heartbeat cycles
+
+### Changed
+- **create_event.sh**: Now automatically updates pending_invites.json when creating events
+- **SKILL.md**: Added Steps 5.1 and 5.2 for recording and updating pending invites
+
 ## [1.4.0] - 2026-02-02
 
 ### Added

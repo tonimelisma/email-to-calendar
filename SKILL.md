@@ -1,7 +1,7 @@
 ---
 name: email-to-calendar
-version: 1.4.0
-description: Extract calendar events from emails and create calendar entries. Supports two modes: (1) Direct inbox monitoring - scans all emails for events, or (2) Forwarded emails - processes emails you forward to a dedicated address. Features event tracking for efficient updates and deletions.
+version: 1.5.0
+description: Extract calendar events from emails and create calendar entries. Supports two modes: (1) Direct inbox monitoring - scans all emails for events, or (2) Forwarded emails - processes emails you forward to a dedicated address. Features event tracking, pending invite reminders via heartbeat.
 ---
 
 > **⚠️ CRITICAL RULES — READ BEFORE PROCESSING ANY EMAIL**
@@ -342,6 +342,81 @@ User can respond with:
 
 This allows users to cherry-pick events without back-and-forth clarification.
 
+### 5.1 Record Pending Invites (AFTER presenting)
+
+**IMPORTANT:** After presenting events to the user, record them in `pending_invites.json` so they can be resurfaced later if the user doesn't respond.
+
+```bash
+SCRIPTS_DIR="$HOME/.openclaw/workspace/skills/email-to-calendar/scripts"
+PENDING_FILE="$HOME/.openclaw/workspace/memory/email-to-calendar/pending_invites.json"
+
+# Create unique invite ID
+INVITE_ID="inv_$(date +%Y%m%d_%H%M%S)"
+
+# Add to pending_invites.json (Agent constructs this JSON from extracted events)
+python3 << 'EOF'
+import json
+import os
+from datetime import datetime
+
+pending_file = os.path.expanduser("~/.openclaw/workspace/memory/email-to-calendar/pending_invites.json")
+
+# Load existing
+try:
+    with open(pending_file, 'r') as f:
+        data = json.load(f)
+except:
+    data = {"invites": []}
+
+# Add new invite (replace with actual extracted data)
+invite = {
+    "id": os.environ.get('INVITE_ID', f"inv_{datetime.now().strftime('%Y%m%d_%H%M%S')}"),
+    "extraction_file": os.environ.get('EXTRACTION_FILE', ''),
+    "email_id": os.environ.get('EMAIL_ID', ''),
+    "email_subject": os.environ.get('EMAIL_SUBJECT', ''),
+    "events": [
+        # Each event from extraction, example:
+        # {"title": "Valentine's Day", "date": "2026-02-11", "time": "09:00-17:00", "status": "pending"}
+    ],
+    "presented_at": datetime.now().isoformat(),
+    "last_reminded": None
+}
+
+data['invites'].append(invite)
+
+with open(pending_file, 'w') as f:
+    json.dump(data, f, indent=2)
+EOF
+```
+
+### 5.2 Update Invite Status (AFTER user response)
+
+After the user responds with their selection, update the status of each event:
+
+```bash
+SCRIPTS_DIR="$HOME/.openclaw/workspace/skills/email-to-calendar/scripts"
+
+# For events user selected to create:
+"$SCRIPTS_DIR/update_invite_status.sh" \
+    --email-id "$EMAIL_ID" \
+    --event-title "Valentine's Day" \
+    --status created
+
+# For events user explicitly declined (said 'none' or didn't select):
+"$SCRIPTS_DIR/update_invite_status.sh" \
+    --email-id "$EMAIL_ID" \
+    --event-title "Team Offsite" \
+    --status dismissed
+```
+
+**Status values:**
+- `pending` - Initial status, not yet actioned
+- `created` - User selected and calendar event was created
+- `dismissed` - User explicitly declined this event
+- `expired` - Event date has passed (auto-set by heartbeat)
+
+**IMPORTANT:** If the conversation ends without user response, events stay `pending` and will be resurfaced during heartbeat cycles.
+
 ### 6. Check for Duplicates (MANDATORY)
 
 **⚠️ THIS IS A HARD REQUIREMENT — ALWAYS DO THIS BEFORE CREATING ANY EVENT**
@@ -678,6 +753,7 @@ Present the items and ask which to process.
 - **Extractions**: `~/.openclaw/workspace/memory/email-extractions/`
 - **Index**: `~/.openclaw/workspace/memory/email-extractions/index.json`
 - **Event Tracking**: `~/.openclaw/workspace/memory/email-to-calendar/events.json`
+- **Pending Invites**: `~/.openclaw/workspace/memory/email-to-calendar/pending_invites.json`
 - **Scripts**: `~/.openclaw/workspace/skills/email-to-calendar/scripts/`
 - **Memory**: `~/.openclaw/workspace/skills/email-to-calendar/MEMORY.md`
 
@@ -798,6 +874,79 @@ if [ -n "$EVENT_ID" ]; then
     ./scripts/delete_tracked_event.sh --event-id "$EVENT_ID"
 fi
 ```
+
+## Pending Invites Reminder System
+
+Events extracted from emails are tracked in `pending_invites.json`. If the user doesn't action them immediately, they're resurfaced during heartbeat cycles.
+
+### Pending Invites File Structure
+
+Located at `~/.openclaw/workspace/memory/email-to-calendar/pending_invites.json`:
+```json
+{
+  "invites": [
+    {
+      "id": "inv_20260201_001",
+      "extraction_file": "2026-02-01-211500.json",
+      "email_id": "19c1c86dcc389443",
+      "email_subject": "Weekly PTA Update",
+      "events": [
+        {
+          "title": "Valentine's Day Party",
+          "date": "2026-02-11",
+          "time": "09:00-17:00",
+          "status": "pending"
+        },
+        {
+          "title": "Staff Development Day",
+          "date": "2026-02-12",
+          "time": "09:00-17:00",
+          "status": "created",
+          "event_id": "abc123"
+        }
+      ],
+      "presented_at": "2026-02-01T21:15:00",
+      "last_reminded": null
+    }
+  ]
+}
+```
+
+### Pending Invite Scripts
+
+#### List pending invites
+```bash
+# JSON output (programmatic)
+./scripts/list_pending.sh
+
+# Human-readable summary
+./scripts/list_pending.sh --summary
+```
+
+#### Update invite status
+```bash
+# Mark as created (after calendar event made)
+./scripts/update_invite_status.sh \
+    --email-id "19c1c86dcc389443" \
+    --event-title "Valentine's Day" \
+    --status created \
+    --event-id "abc123xyz"
+
+# Mark as dismissed (user declined)
+./scripts/update_invite_status.sh \
+    --email-id "19c1c86dcc389443" \
+    --event-title "Team Offsite" \
+    --status dismissed
+```
+
+### Heartbeat Integration
+
+Pending invites are automatically checked during heartbeat cycles (see `HEARTBEAT.md`). The heartbeat will:
+1. Run `list_pending.sh --summary` to find unactioned events
+2. Present them to the user with the same numbered selection UI
+3. Update statuses based on user response
+
+Events with past dates are automatically marked as `expired` and excluded from reminders.
 
 ## Example Usage
 
