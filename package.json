@@ -1,6 +1,6 @@
 {
   "name": "email-to-calendar",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Extract calendar events from emails (direct monitoring or forwarded), create Google Calendar events with duplicate detection",
   "author": "tonimelisma",
   "license": "MIT",

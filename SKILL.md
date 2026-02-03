@@ -1,6 +1,6 @@
 ---
 name: email-to-calendar
-version: 1.3.0
+version: 1.4.0
 description: Extract calendar events from emails and create calendar entries. Supports two modes: (1) Direct inbox monitoring - scans all emails for events, or (2) Forwarded emails - processes emails you forward to a dedicated address. Features event tracking for efficient updates and deletions.
 ---
 
@@ -236,17 +236,18 @@ gog gmail get <messageId> --account "$GMAIL_ACCOUNT"
 gog gmail messages search "subject:Fwd" --max 5 --include-body --account "$GMAIL_ACCOUNT"
 ```
 
-### 3. Extract Events and Actions
+### 3. Extract Events and Actions (Agent does this directly)
 
-Parse the email content manually or use the extraction script:
+Read the email content and extract events as structured data. **Do NOT use any extraction script** - the Agent's natural language understanding is more accurate than regex patterns for unstructured email content (e.g., "we meet next Tuesday, not this one" is trivial for an LLM but impossible for regex).
 
-```bash
-python3 ~/.openclaw/workspace/skills/email-to-calendar/scripts/extract_events.py <email_content>
-```
+For each potential event, identify:
+- **title**: Descriptive event name (max 80 chars)
+- **date**: The date(s) of the event
+- **time**: Start/end times if specified (default: 9 AM - 5 PM)
+- **is_multi_day**: Whether it spans multiple days
+- **confidence**: high/medium/low based on context clarity
 
-The script outputs JSON with:
-- `events`: Calendar events with title, date, time, and context
-- `actions`: Action items and tasks with optional deadlines
+Also extract any action items with optional deadlines.
 
 ### 4. Store Extracted Items
 
@@ -256,7 +257,7 @@ Save the extracted items to a memory file for later review:
 # Create dated extraction file
 EXTRACTION_FILE="$HOME/.openclaw/workspace/memory/email-extractions/$(date +%Y-%m-%d-%H%M%S).json"
 mkdir -p "$(dirname "$EXTRACTION_FILE")"
-python3 ~/.openclaw/workspace/skills/email-to-calendar/scripts/extract_events.py "$EMAIL_CONTENT" > "$EXTRACTION_FILE"
+# Write the extracted events as JSON (Agent constructs this from Step 3)
 ```
 
 Also update a master index file with the email_id to prevent reprocessing:
@@ -311,26 +312,35 @@ for event in events:
         continue
 
     # Everything else needs user confirmation
-    mark as "PENDING USER DECISION"
+    mark as "PENDING"
 ```
 
-Present ALL items to the user (including skipped ones, so they know what was filtered):
+Present ALL items to the user with numbered selection:
 
-**Events:**
-1. ~~**ELAC Meeting** - February 2 at 8:15 AM~~ *(SKIP - matches ignore pattern "ELAC")*
-2. ~~**WCEF Fundraiser** - February 2-6~~ *(SKIP - matches ignore pattern "fundraiser")*
-3. ~~**Teachers Lounge Restock** - February 4~~ *(SKIP - matches ignore pattern)*
-4. **Classroom Valentine's Day** - February 11 *(AUTO-CREATE - matches "Valentine's Day")*
-5. **Staff Development Day - No School** - February 12 *(AUTO-CREATE - matches "No School")*
-6. **President's Day Weekend - No School** - February 13-16 *(AUTO-CREATE - matches "No School")*
-7. ~~**PTA Meeting** - February 19 at 7 PM~~ *(SKIP - matches ignore pattern "PTA meeting")*
-
-**⏸️ STOP AND ASK:**
-> "I found 7 events. 3 will be auto-created per your config (items 4, 5, 6). 4 are skipped per your ignore patterns.
+**Example presentation:**
+> I found the following potential events:
 >
-> Should I proceed with creating the auto-create events? (yes/no)"
+> 1. ~~ELAC Meeting (Feb 2 at 8:15 AM)~~ - SKIP (matches ignore pattern)
+> 2. ~~WCEF Fundraiser (Feb 2-6)~~ - SKIP (matches ignore pattern)
+> 3. **Team Offsite (Feb 2-6)** - PENDING
+> 4. **Classroom Valentine's Day (Feb 11)** - AUTO-CREATE
+> 5. **Staff Development Day - No School (Feb 12)** - AUTO-CREATE
+> 6. **President's Day Weekend - No School (Feb 13-16)** - AUTO-CREATE
+> 7. ~~PTA Meeting (Feb 19 at 7 PM)~~ - SKIP (matches ignore pattern)
+> 8. **Copyright Notice (Jan 1, 2026)** - PENDING *(likely false positive)*
+>
+> Reply with the numbers you want to create (e.g., '3, 4, 5, 6'), 'all', or 'none'.
+> *(Items marked SKIP are excluded. AUTO-CREATE items are pre-selected.)*
 
-**DO NOT PROCEED until user responds.** Even for auto-create events, get a simple "yes" confirmation.
+**⏸️ STOP AND WAIT for user response.**
+
+User can respond with:
+- Specific numbers: `3, 4, 5, 6` → Create only those items
+- `all` → Create all non-skipped items (3-6, 8)
+- `none` → Cancel, create nothing
+- `4, 5, 6` → Create just the auto-create items (excluding 3 and 8)
+
+This allows users to cherry-pick events without back-and-forth clarification.
 
 ### 6. Check for Duplicates (MANDATORY)
 

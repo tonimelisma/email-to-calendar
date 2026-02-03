@@ -117,6 +117,29 @@ fi
 START_ISO="${ISO_DATE}T${START_PARSED}:00"
 END_ISO="${ISO_DATE}T${END_PARSED}:00"
 
+# Function to create a new event
+create_new_event() {
+    if [ -n "$ATTENDEE_EMAIL" ]; then
+        RESULT=$(gog calendar create "$CALENDAR_ID" \
+            --summary "$TITLE" \
+            --from "$START_ISO" \
+            --to "$END_ISO" \
+            --description "$DESCRIPTION" \
+            --attendees "$ATTENDEE_EMAIL" \
+            $SEND_UPDATES_FLAG \
+            --json 2>&1)
+    else
+        RESULT=$(gog calendar create "$CALENDAR_ID" \
+            --summary "$TITLE" \
+            --from "$START_ISO" \
+            --to "$END_ISO" \
+            --description "$DESCRIPTION" \
+            --json 2>&1)
+    fi
+    # Extract event ID from JSON response
+    EVENT_ID=$(echo "$RESULT" | jq -r '.id // empty' 2>/dev/null)
+}
+
 # Check if this is an update or create
 if [ -n "$EXISTING_EVENT_ID" ]; then
     # Update existing event
@@ -129,37 +152,28 @@ if [ -n "$EXISTING_EVENT_ID" ]; then
             --description "$DESCRIPTION" \
             --add-attendee "$ATTENDEE_EMAIL" \
             $SEND_UPDATES_FLAG \
-            --json 2>/dev/null)
+            --json 2>&1)
     else
         RESULT=$(gog calendar update "$CALENDAR_ID" "$EXISTING_EVENT_ID" \
             --summary "$TITLE" \
             --from "$START_ISO" \
             --to "$END_ISO" \
             --description "$DESCRIPTION" \
-            --json 2>/dev/null)
+            --json 2>&1)
     fi
-    EVENT_ID="$EXISTING_EVENT_ID"
-else
-    # Create new event with attendee support
-    if [ -n "$ATTENDEE_EMAIL" ]; then
-        RESULT=$(gog calendar create "$CALENDAR_ID" \
-            --summary "$TITLE" \
-            --from "$START_ISO" \
-            --to "$END_ISO" \
-            --description "$DESCRIPTION" \
-            --attendees "$ATTENDEE_EMAIL" \
-            $SEND_UPDATES_FLAG \
-            --json 2>/dev/null)
+
+    # Self-healing: Check if event was deleted externally (404/410 error)
+    if echo "$RESULT" | grep -qiE "404|not found|410|gone|does not exist|deleted"; then
+        echo "Event $EXISTING_EVENT_ID no longer exists, removing from tracking and creating new" >&2
+        "$SCRIPT_DIR/delete_tracked_event.sh" --event-id "$EXISTING_EVENT_ID"
+        # Fall back to creating a new event
+        create_new_event
     else
-        RESULT=$(gog calendar create "$CALENDAR_ID" \
-            --summary "$TITLE" \
-            --from "$START_ISO" \
-            --to "$END_ISO" \
-            --description "$DESCRIPTION" \
-            --json 2>/dev/null)
+        EVENT_ID="$EXISTING_EVENT_ID"
     fi
-    # Extract event ID from JSON response
-    EVENT_ID=$(echo "$RESULT" | jq -r '.id // empty' 2>/dev/null)
+else
+    # Create new event
+    create_new_event
 fi
 
 # Output the result
