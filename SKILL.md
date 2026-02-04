@@ -1,6 +1,6 @@
 ---
 name: email-to-calendar
-version: 1.11.0
+version: 1.12.0
 description: Extract calendar events from emails and create calendar entries. Supports two modes: (1) Direct inbox monitoring - scans all emails for events, or (2) Forwarded emails - processes emails you forward to a dedicated address. Features smart onboarding, event tracking, pending invite reminders, undo support, silent activity logging, deadline detection with separate reminder events, email notifications for action-required items, and provider abstraction for future extensibility.
 ---
 
@@ -190,18 +190,22 @@ Use LLM semantic matching for fuzzy duplicates (e.g., "Team Offsite" vs "Team Of
 
 For direct gog commands and advanced options, see [references/gog-commands.md](references/gog-commands.md).
 
-### 6. Update Status and Handle Email
+### 6. Email Disposition (Automatic)
+
+Email disposition (mark as read and/or archive) is handled **automatically** by `create_event.sh` based on config settings. No manual step needed - emails are dispositioned after event creation.
+
+To manually disposition an email:
+```bash
+"$SCRIPTS_DIR/disposition_email.sh" --email-id "$EMAIL_ID"
+```
+
+To process calendar reply emails (accepts, declines, tentatives):
+```bash
+"$SCRIPTS_DIR/process_calendar_replies.sh"           # Process all
+"$SCRIPTS_DIR/process_calendar_replies.sh" --dry-run # Preview only
+```
 
 ```bash
-# Update invite status
-"$SCRIPTS_DIR/update_invite_status.sh" \
-    --email-id "$EMAIL_ID" \
-    --event-title "Event Title" \
-    --status created
-
-# Mark email as read (per config) using wrapper script
-"$SCRIPTS_DIR/email_modify.sh" --email-id "$EMAIL_ID" --remove-labels "UNREAD"
-
 # End activity session
 "$SCRIPTS_DIR/activity_log.sh" end-session
 ```

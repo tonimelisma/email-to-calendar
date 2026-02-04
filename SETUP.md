@@ -28,7 +28,8 @@ Here's my suggested configuration (change any you disagree with):
 6. Multi-day events: Daily recurring
 7. Ignore patterns: (none)
 8. Auto-create patterns: (none)
-9. Email handling: Mark as read only
+9. Email handling: Mark as read and archive (recommended)
+   Also auto-process calendar replies? (Y/n)
 
 Type numbers to change (e.g., "3, 7") or press Enter to accept all defaults.
 ```
@@ -91,7 +92,8 @@ The skill stores settings in `~/.config/email-to-calendar/config.json`.
 | `event_rules.ignore_patterns` | string[] | `[]` | Event types to always skip |
 | `event_rules.auto_create_patterns` | string[] | `[]` | Event types to auto-create |
 | `email_handling.mark_read` | boolean | `true` | Mark processed emails as read |
-| `email_handling.archive` | boolean | `false` | Archive processed emails |
+| `email_handling.archive` | boolean | `true` | Archive processed emails |
+| `email_handling.auto_dispose_calendar_replies` | boolean | `true` | Auto-process calendar reply emails (accepts, declines, tentatives) |
 | `deadline_notifications.enabled` | boolean | `false` | Send email notifications for events with deadlines |
 | `deadline_notifications.email_recipient` | string | (gmail_account) | Email address to send notifications to |
 
@@ -143,7 +145,8 @@ The skill guesses the best mode based on your email pattern:
   },
   "email_handling": {
     "mark_read": true,
-    "archive": false
+    "archive": true,
+    "auto_dispose_calendar_replies": true
   },
   "deadline_notifications": {
     "enabled": true,
@@ -178,7 +181,8 @@ The skill guesses the best mode based on your email pattern:
   },
   "email_handling": {
     "mark_read": true,
-    "archive": true
+    "archive": true,
+    "auto_dispose_calendar_replies": true
   },
   "deadline_notifications": {
     "enabled": true,
@@ -211,7 +215,8 @@ The skill guesses the best mode based on your email pattern:
   },
   "email_handling": {
     "mark_read": true,
-    "archive": false
+    "archive": true,
+    "auto_dispose_calendar_replies": true
   }
 }
 ```
@@ -246,7 +251,8 @@ cat > ~/.config/email-to-calendar/config.json << 'EOF'
   },
   "email_handling": {
     "mark_read": true,
-    "archive": false
+    "archive": true,
+    "auto_dispose_calendar_replies": true
   },
   "deadline_notifications": {
     "enabled": false,

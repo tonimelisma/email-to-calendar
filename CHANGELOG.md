@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.12.0] - 2026-02-04
+
+### Added
+- **Automatic Email Disposition**: Emails are now automatically marked read and archived after event creation
+  - New `scripts/utils/disposition_ops.py`: Core disposition logic with `get_disposition_settings()` and `disposition_email()`
+  - New `scripts/disposition_email.sh`: Shell wrapper for manual disposition
+  - New `scripts/process_calendar_replies.sh`: Process calendar reply emails (accepts, declines, tentatives)
+- **Calendar Reply Auto-Processing**: Automatically disposition unread calendar notifications from Google Calendar
+  - Matches patterns: Accepted, Declined, Tentative, Updated invitation, Cancelled
+  - Run manually with `process_calendar_replies.sh` or `process_calendar_replies.sh --dry-run`
+- **New Config Option**: `email_handling.auto_dispose_calendar_replies` (default: true)
+- **Unit Tests**: 19 new tests for disposition operations in `test_disposition_ops.py`
+
+### Changed
+- **create_event.sh**: Now automatically dispositions source email after successful event creation
+- **Default Config**: `archive` now defaults to `true` (was `false`) for cleaner inbox management
+- **SKILL.md Section 6**: Replaced manual email handling instructions with automatic disposition documentation
+
+### Documentation
+- `SETUP.md`: Added `auto_dispose_calendar_replies` config option
+- Updated all example configs to include the new option and use `archive: true` default
+
 ## [1.11.0] - 2026-02-03
 
 ### Added

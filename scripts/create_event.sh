@@ -184,5 +184,8 @@ EOF
             --event-title "$TITLE" \
             --status created \
             --event-id "$EVENT_ID" 2>/dev/null || true
+
+        # Auto-disposition email based on config (mark read and/or archive)
+        "$SCRIPT_DIR/disposition_email.sh" --email-id "$EMAIL_ID" 2>/dev/null || true
     fi
 fi
