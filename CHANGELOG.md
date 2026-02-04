@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.10.0] - 2026-02-03
+
+### Added
+- **Deadline Detection**: Automatically detects RSVP, registration, and ticket deadlines from emails
+  - Scans for patterns like "RSVP by [date]", "Register by [date]", "Tickets available until [date]"
+  - Extracts deadline_date, deadline_action, and deadline_url fields
+- **Deadline Reminder Events**: Creates separate calendar events for action-required deadlines
+  - Title format: `DEADLINE: [Action] for [Event Name]`
+  - Set at 9:00 AM on the deadline date (30 min duration)
+  - Includes email reminder 1 day before + popup reminder 1 hour before
+- **Action Required Warnings**: Main events with deadlines include prominent capital letter warnings
+  - Format: `*** ACTION REQUIRED: [ACTION] BY [DATE] ***`
+  - Warning placed at the beginning of event description
+- **Email Notifications**: Optional email alerts for events requiring user action
+  - New config: `deadline_notifications.enabled` and `deadline_notifications.email_recipient`
+  - Uses `gog gmail send` command
+  - Includes event details, deadline, action required, and link
+- **Improved URL Extraction**: URLs now placed at the beginning of event descriptions
+  - Format: `Event Link: [URL]` appears right after any deadline warning
+  - Makes action links more visible and accessible
+
+### Changed
+- **Event Description Format**: Structured format with clear sections
+  1. Action warning (if deadline exists)
+  2. Event link (if URL found)
+  3. Event details from email
+
+### Documentation
+- `references/gog-commands.md`: Added `gog gmail send` command documentation
+- `SETUP.md`: Added `deadline_notifications` configuration section with examples
+
 ## [1.9.1] - 2026-02-02
 
 ### Added

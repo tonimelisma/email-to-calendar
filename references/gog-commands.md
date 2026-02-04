@@ -142,6 +142,45 @@ The `create_event.sh` script auto-detects support and uses it when available.
 
 ## Gmail Operations
 
+### Send an Email
+
+```bash
+gog gmail send \
+    --account "sender@gmail.com" \
+    --to "recipient@example.com" \
+    --subject "Subject line" \
+    --body "Email body text"
+```
+
+**Flags:**
+| Flag | Description | Required |
+|------|-------------|----------|
+| `--account` | Gmail account to send from | Yes |
+| `--to` | Recipient email address | Yes |
+| `--subject` | Email subject line | Yes |
+| `--body` | Email body text | Yes |
+| `--cc` | CC recipients (comma-separated) | No |
+| `--bcc` | BCC recipients (comma-separated) | No |
+
+**Example - Deadline notification:**
+```bash
+gog gmail send \
+    --account "user@gmail.com" \
+    --to "user@gmail.com" \
+    --subject "ACTION REQUIRED: RSVP for Team Offsite by Feb 10" \
+    --body "A calendar event has been created that requires your action.
+
+Event: Team Offsite
+Date: February 15-17, 2026
+Deadline: February 10, 2026
+Action Required: RSVP
+
+Link: https://example.com/rsvp
+
+---
+Sent by email-to-calendar skill"
+```
+
 ### Get a Single Email
 
 ```bash

@@ -65,6 +65,10 @@ The skill stores settings in `~/.config/email-to-calendar/config.json`.
   "email_handling": {
     "mark_read": true,
     "archive": false
+  },
+  "deadline_notifications": {
+    "enabled": true,
+    "email_recipient": "your-email@gmail.com"
   }
 }
 ```
@@ -86,6 +90,8 @@ The skill stores settings in `~/.config/email-to-calendar/config.json`.
 | `event_rules.auto_create_patterns` | string[] | `[]` | Event types to auto-create |
 | `email_handling.mark_read` | boolean | `true` | Mark processed emails as read |
 | `email_handling.archive` | boolean | `false` | Archive processed emails |
+| `deadline_notifications.enabled` | boolean | `false` | Send email notifications for events with deadlines |
+| `deadline_notifications.email_recipient` | string | (gmail_account) | Email address to send notifications to |
 
 ### Email Mode Detection
 
@@ -135,6 +141,10 @@ The skill guesses the best mode based on your email pattern:
   "email_handling": {
     "mark_read": true,
     "archive": false
+  },
+  "deadline_notifications": {
+    "enabled": true,
+    "email_recipient": "parent1@gmail.com"
   }
 }
 ```
@@ -165,6 +175,10 @@ The skill guesses the best mode based on your email pattern:
   "email_handling": {
     "mark_read": true,
     "archive": true
+  },
+  "deadline_notifications": {
+    "enabled": true,
+    "email_recipient": "work@company.com"
   }
 }
 ```
@@ -227,6 +241,10 @@ cat > ~/.config/email-to-calendar/config.json << 'EOF'
   "email_handling": {
     "mark_read": true,
     "archive": false
+  },
+  "deadline_notifications": {
+    "enabled": false,
+    "email_recipient": "your-email@gmail.com"
   }
 }
 EOF
