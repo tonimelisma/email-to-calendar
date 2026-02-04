@@ -7,12 +7,13 @@
 #   --change-id <id>           Undo a specific change by ID
 #   list                       List undoable changes
 #
+# Options:
+#   --provider <provider>      Calendar provider (default: from config)
+#
 # Undo behavior:
 #   create -> deletes the event
 #   update -> restores the 'before' state
 #   delete -> recreates the event (if within time window)
-#
-# Requires gog CLI for calendar operations
 
 SCRIPTS_DIR="$(dirname "$0")"
 UTILS_DIR="$SCRIPTS_DIR/utils"
@@ -22,11 +23,16 @@ ACTION="${1:-}"
 shift 2>/dev/null || true
 
 CHANGE_ID=""
+PROVIDER=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --change-id)
             CHANGE_ID="$2"
+            shift 2
+            ;;
+        --provider)
+            PROVIDER="$2"
             shift 2
             ;;
         *)
@@ -35,10 +41,10 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Detect if --send-updates flag is supported (tonimelisma fork)
-SEND_UPDATES_FLAG=""
-if gog calendar create --help 2>&1 | grep -q -- '--send-updates'; then
-    SEND_UPDATES_FLAG="--send-updates all"
+# Build provider argument for calendar_ops.py
+PROVIDER_ARG=""
+if [ -n "$PROVIDER" ]; then
+    PROVIDER_ARG="--provider \"$PROVIDER\""
 fi
 
 case "$ACTION" in
@@ -109,12 +115,13 @@ echo "Undoing $ACTION_TYPE for event $EVENT_ID..."
 
 case "$ACTION_TYPE" in
     create)
-        # Undo create: delete the event
+        # Undo create: delete the event using calendar_ops.py
         echo "Deleting event that was created..."
-        RESULT=$(gog calendar delete "$CALENDAR_ID" "$EVENT_ID" 2>&1)
+        DELETE_ARGS="delete --event-id \"$EVENT_ID\" --calendar-id \"$CALENDAR_ID\" $PROVIDER_ARG"
+        RESULT=$(eval python3 "$UTILS_DIR/calendar_ops.py" $DELETE_ARGS 2>&1)
 
-        if echo "$RESULT" | grep -qiE "error|failed|404|not found"; then
-            echo "Warning: Event may already be deleted: $RESULT" >&2
+        if echo "$RESULT" | jq -e '.success == false' > /dev/null 2>&1; then
+            echo "Warning: Event may already be deleted: $(echo "$RESULT" | jq -r '.error')" >&2
         else
             echo "Event deleted successfully"
         fi
@@ -124,7 +131,7 @@ case "$ACTION_TYPE" in
         ;;
 
     update)
-        # Undo update: restore before state
+        # Undo update: restore before state using calendar_ops.py
         BEFORE_SUMMARY=$(echo "$CHANGE_JSON" | jq -r '.before.summary // empty')
         BEFORE_START=$(echo "$CHANGE_JSON" | jq -r '.before.start // empty')
         BEFORE_END=$(echo "$CHANGE_JSON" | jq -r '.before.end // empty')
@@ -136,18 +143,19 @@ case "$ACTION_TYPE" in
 
         echo "Restoring previous state: \"$BEFORE_SUMMARY\""
 
-        UPDATE_ARGS="--summary \"$BEFORE_SUMMARY\""
+        UPDATE_ARGS="update --event-id \"$EVENT_ID\" --calendar-id \"$CALENDAR_ID\" --summary \"$BEFORE_SUMMARY\""
         if [ -n "$BEFORE_START" ]; then
             UPDATE_ARGS="$UPDATE_ARGS --from \"$BEFORE_START\""
         fi
         if [ -n "$BEFORE_END" ]; then
             UPDATE_ARGS="$UPDATE_ARGS --to \"$BEFORE_END\""
         fi
+        UPDATE_ARGS="$UPDATE_ARGS $PROVIDER_ARG"
 
-        RESULT=$(eval gog calendar update "$CALENDAR_ID" "$EVENT_ID" $UPDATE_ARGS $SEND_UPDATES_FLAG 2>&1)
+        RESULT=$(eval python3 "$UTILS_DIR/calendar_ops.py" $UPDATE_ARGS 2>&1)
 
-        if echo "$RESULT" | grep -qiE "error|failed"; then
-            echo "Error restoring event: $RESULT" >&2
+        if echo "$RESULT" | jq -e '.success == false' > /dev/null 2>&1; then
+            echo "Error restoring event: $(echo "$RESULT" | jq -r '.error')" >&2
             exit 1
         fi
 
@@ -158,7 +166,7 @@ case "$ACTION_TYPE" in
         ;;
 
     delete)
-        # Undo delete: recreate the event
+        # Undo delete: recreate the event using calendar_ops.py
         BEFORE_SUMMARY=$(echo "$CHANGE_JSON" | jq -r '.before.summary // empty')
         BEFORE_START=$(echo "$CHANGE_JSON" | jq -r '.before.start // empty')
         BEFORE_END=$(echo "$CHANGE_JSON" | jq -r '.before.end // empty')
@@ -170,14 +178,10 @@ case "$ACTION_TYPE" in
 
         echo "Recreating deleted event: \"$BEFORE_SUMMARY\""
 
-        RESULT=$(gog calendar create "$CALENDAR_ID" \
-            --summary "$BEFORE_SUMMARY" \
-            --from "$BEFORE_START" \
-            --to "$BEFORE_END" \
-            $SEND_UPDATES_FLAG \
-            --json 2>&1)
+        CREATE_ARGS="create --summary \"$BEFORE_SUMMARY\" --from \"$BEFORE_START\" --to \"$BEFORE_END\" --calendar-id \"$CALENDAR_ID\" $PROVIDER_ARG"
+        RESULT=$(eval python3 "$UTILS_DIR/calendar_ops.py" $CREATE_ARGS 2>&1)
 
-        NEW_EVENT_ID=$(echo "$RESULT" | jq -r '.id // empty' 2>/dev/null)
+        NEW_EVENT_ID=$(echo "$RESULT" | jq -r '.data.id // empty' 2>/dev/null)
 
         if [ -n "$NEW_EVENT_ID" ]; then
             echo "Event recreated with new ID: $NEW_EVENT_ID"
@@ -189,7 +193,7 @@ case "$ACTION_TYPE" in
                 --summary "$BEFORE_SUMMARY" \
                 --start "$BEFORE_START" 2>/dev/null || true
         else
-            echo "Error recreating event: $RESULT" >&2
+            echo "Error recreating event: $(echo "$RESULT" | jq -r '.error // .raw')" >&2
             exit 1
         fi
         ;;

@@ -1,19 +1,14 @@
 #!/bin/bash
 # Create or update a calendar event with automatic tracking and changelog
-# Usage: create_event.sh <calendar_id> <title> <date> <start_time> <end_time> <description> <attendee_email> [event_id] [email_id]
+# Usage: create_event.sh <calendar_id> <title> <date> <start_time> <end_time> <description> <attendee_email> [event_id] [email_id] [--provider <provider>]
 #
 # If event_id is provided, updates existing event. Otherwise creates new one.
-# Captures the event ID from gog's JSON output and stores it in events.json tracking.
+# Captures the event ID from JSON output and stores it in events.json tracking.
 # Records changes to changelog.json for undo support.
 # Returns the event ID on success for reference.
 
 SCRIPT_DIR="$(dirname "$0")"
-
-# Detect if --send-updates flag is supported (tonimelisma fork)
-SEND_UPDATES_FLAG=""
-if gog calendar create --help 2>&1 | grep -q -- '--send-updates'; then
-    SEND_UPDATES_FLAG="--send-updates all"
-fi
+UTILS_DIR="$SCRIPT_DIR/utils"
 
 CALENDAR_ID="${1:-primary}"
 TITLE="$2"
@@ -24,6 +19,21 @@ DESCRIPTION="$6"
 ATTENDEE_EMAIL="$7"
 EXISTING_EVENT_ID="${8:-}"
 EMAIL_ID="${9:-}"
+PROVIDER=""
+
+# Parse optional --provider flag from remaining args
+shift 9 2>/dev/null || true
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --provider)
+            PROVIDER="$2"
+            shift 2
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
 
 if [ -z "$TITLE" ] || [ -z "$DATE" ]; then
     echo "Usage: create_event.sh <calendar_id> <title> <date> <start_time> <end_time> <description> <attendee_email> [event_id]" >&2
@@ -69,28 +79,24 @@ get_event_state() {
     fi
 }
 
-# Function to create a new event
+# Function to create a new event using calendar_ops.py
 create_new_event() {
     IS_NEW_EVENT=true
-    if [ -n "$ATTENDEE_EMAIL" ]; then
-        RESULT=$(gog calendar create "$CALENDAR_ID" \
-            --summary "$TITLE" \
-            --from "$START_ISO" \
-            --to "$END_ISO" \
-            --description "$DESCRIPTION" \
-            --attendees "$ATTENDEE_EMAIL" \
-            $SEND_UPDATES_FLAG \
-            --json 2>&1)
-    else
-        RESULT=$(gog calendar create "$CALENDAR_ID" \
-            --summary "$TITLE" \
-            --from "$START_ISO" \
-            --to "$END_ISO" \
-            --description "$DESCRIPTION" \
-            --json 2>&1)
+    local ARGS="create --summary \"$TITLE\" --from \"$START_ISO\" --to \"$END_ISO\" --calendar-id \"$CALENDAR_ID\""
+
+    if [ -n "$DESCRIPTION" ]; then
+        ARGS="$ARGS --description \"$DESCRIPTION\""
     fi
-    # Extract event ID from JSON response
-    EVENT_ID=$(echo "$RESULT" | jq -r '.id // empty' 2>/dev/null)
+    if [ -n "$ATTENDEE_EMAIL" ]; then
+        ARGS="$ARGS --attendees \"$ATTENDEE_EMAIL\""
+    fi
+    if [ -n "$PROVIDER" ]; then
+        ARGS="$ARGS --provider \"$PROVIDER\""
+    fi
+
+    RESULT=$(eval python3 "$UTILS_DIR/calendar_ops.py" $ARGS 2>&1)
+    # Extract event ID from JSON response (nested in data.id)
+    EVENT_ID=$(echo "$RESULT" | jq -r '.data.id // empty' 2>/dev/null)
 }
 
 # Check if this is an update or create
@@ -98,28 +104,24 @@ if [ -n "$EXISTING_EVENT_ID" ]; then
     # Get before state for changelog
     BEFORE_STATE=$(get_event_state "$EXISTING_EVENT_ID" "$CALENDAR_ID")
 
-    # Update existing event
+    # Update existing event using calendar_ops.py
     echo "Updating existing event: $EXISTING_EVENT_ID" >&2
+    local UPDATE_ARGS="update --event-id \"$EXISTING_EVENT_ID\" --summary \"$TITLE\" --from \"$START_ISO\" --to \"$END_ISO\" --calendar-id \"$CALENDAR_ID\""
+
+    if [ -n "$DESCRIPTION" ]; then
+        UPDATE_ARGS="$UPDATE_ARGS --description \"$DESCRIPTION\""
+    fi
     if [ -n "$ATTENDEE_EMAIL" ]; then
-        RESULT=$(gog calendar update "$CALENDAR_ID" "$EXISTING_EVENT_ID" \
-            --summary "$TITLE" \
-            --from "$START_ISO" \
-            --to "$END_ISO" \
-            --description "$DESCRIPTION" \
-            --add-attendee "$ATTENDEE_EMAIL" \
-            $SEND_UPDATES_FLAG \
-            --json 2>&1)
-    else
-        RESULT=$(gog calendar update "$CALENDAR_ID" "$EXISTING_EVENT_ID" \
-            --summary "$TITLE" \
-            --from "$START_ISO" \
-            --to "$END_ISO" \
-            --description "$DESCRIPTION" \
-            --json 2>&1)
+        UPDATE_ARGS="$UPDATE_ARGS --add-attendees \"$ATTENDEE_EMAIL\""
+    fi
+    if [ -n "$PROVIDER" ]; then
+        UPDATE_ARGS="$UPDATE_ARGS --provider \"$PROVIDER\""
     fi
 
+    RESULT=$(eval python3 "$UTILS_DIR/calendar_ops.py" $UPDATE_ARGS 2>&1)
+
     # Self-healing: Check if event was deleted externally (404/410 error)
-    if echo "$RESULT" | grep -qiE "404|not found|410|gone|does not exist|deleted"; then
+    if echo "$RESULT" | jq -e '.error_type == "not_found"' > /dev/null 2>&1 || echo "$RESULT" | grep -qiE "404|not found|410|gone|does not exist|deleted"; then
         echo "Event $EXISTING_EVENT_ID no longer exists, removing from tracking and creating new" >&2
         "$SCRIPT_DIR/delete_tracked_event.sh" --event-id "$EXISTING_EVENT_ID"
         BEFORE_STATE=""  # Clear before state since we're creating new

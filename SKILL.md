@@ -1,7 +1,7 @@
 ---
 name: email-to-calendar
-version: 1.10.0
-description: Extract calendar events from emails and create calendar entries. Supports two modes: (1) Direct inbox monitoring - scans all emails for events, or (2) Forwarded emails - processes emails you forward to a dedicated address. Features smart onboarding, event tracking, pending invite reminders, undo support, silent activity logging, deadline detection with separate reminder events, and email notifications for action-required items.
+version: 1.11.0
+description: Extract calendar events from emails and create calendar entries. Supports two modes: (1) Direct inbox monitoring - scans all emails for events, or (2) Forwarded emails - processes emails you forward to a dedicated address. Features smart onboarding, event tracking, pending invite reminders, undo support, silent activity logging, deadline detection with separate reminder events, email notifications for action-required items, and provider abstraction for future extensibility.
 ---
 
 > **CRITICAL RULES - READ BEFORE PROCESSING ANY EMAIL**
@@ -15,10 +15,10 @@ description: Extract calendar events from emails and create calendar entries. Su
 > 7. **TRACK ALL CREATED EVENTS** - The `create_event.sh` script automatically tracks events; use tracked IDs for updates/deletions
 > 8. **SHOW DAY-OF-WEEK** - Always include the day of week when presenting events for user verification
 
-> **Tool Flexibility:** This skill is designed for Gmail and Google Calendar.
-> The `gog` CLI commands shown below are reference examples. If your agent
-> has alternative tools for email/calendar access (MCP servers, other CLIs),
-> use those instead - the workflow and logic remain the same.
+> **Tool Flexibility:** This skill uses a provider abstraction layer.
+> All email and calendar operations should go through the wrapper scripts in
+> `scripts/`. This ensures proper tracking and prevents duplicate events.
+> **NEVER call `gog` or other provider CLIs directly** - always use the scripts.
 
 # Email to Calendar Skill
 
@@ -28,18 +28,16 @@ Extract calendar events and action items from emails, present them for review, a
 
 ## Reading Email Content
 
-**IMPORTANT:** Before you can extract events, you must read the email body.
+**IMPORTANT:** Before you can extract events, you must read the email body. Use the wrapper scripts.
 
 ```bash
-# Read config for Gmail account
-CONFIG_FILE="$HOME/.config/email-to-calendar/config.json"
-GMAIL_ACCOUNT=$(jq -r '.gmail_account' "$CONFIG_FILE")
+SCRIPTS_DIR="$HOME/.openclaw/workspace/skills/email-to-calendar/scripts"
 
 # Get a single email by ID (PREFERRED)
-gog gmail get <messageId> --account "$GMAIL_ACCOUNT"
+"$SCRIPTS_DIR/email_read.sh" --email-id "<messageId>"
 
 # Search with body content included
-gog gmail messages search "in:inbox is:unread" --max 20 --include-body --account "$GMAIL_ACCOUNT"
+"$SCRIPTS_DIR/email_search.sh" --query "in:inbox is:unread" --max 20 --include-body
 ```
 
 **Note on stale forwards:** Don't use `newer_than:1d` because it checks the email's original date header, not when it was received. Process all UNREAD emails and rely on the "already processed" check.
@@ -152,9 +150,9 @@ if [ -z "$EXISTING_EVENT_ID" ]; then
     TRACKED=$("$SCRIPTS_DIR/lookup_event.sh" --summary "$EVENT_TITLE")
 fi
 
-# Step 3: Fall back to calendar search
+# Step 3: Fall back to calendar search using wrapper script
 if [ -z "$EXISTING_EVENT_ID" ]; then
-    gog calendar events "$CALENDAR_ID" --from "${EVENT_DATE}T00:00:00" --to "${EVENT_DATE}T23:59:59" --json
+    "$SCRIPTS_DIR/calendar_search.sh" --calendar-id "$CALENDAR_ID" --from "${EVENT_DATE}T00:00:00" --to "${EVENT_DATE}T23:59:59"
 fi
 ```
 
@@ -201,8 +199,8 @@ For direct gog commands and advanced options, see [references/gog-commands.md](r
     --event-title "Event Title" \
     --status created
 
-# Mark email as read (per config)
-gog gmail modify "$EMAIL_ID" --remove-labels UNREAD --account "$GMAIL_ACCOUNT"
+# Mark email as read (per config) using wrapper script
+"$SCRIPTS_DIR/email_modify.sh" --email-id "$EMAIL_ID" --remove-labels "UNREAD"
 
 # End activity session
 "$SCRIPTS_DIR/activity_log.sh" end-session
@@ -281,17 +279,21 @@ Doors open at 7 PM" \
 
 **2. Deadline Reminder Event** (separate event on the deadline date):
 ```bash
-gog calendar create "$CALENDAR_ID" \
-    --summary "DEADLINE: Get tickets for Spring Concert" \
-    --from "2026-02-15T09:00:00" \
-    --to "2026-02-15T09:30:00" \
-    --description "Action required: Get tickets
+# Use create_event.sh for deadline reminders too (ensures tracking)
+"$SCRIPTS_DIR/create_event.sh" \
+    "$CALENDAR_ID" \
+    "DEADLINE: Get tickets for Spring Concert" \
+    "2026-02-15" \
+    "09:00" \
+    "09:30" \
+    "Action required: Get tickets
 
 Event Link: https://example.com/tickets
 
 Main event: Spring Concert on March 1, 2026" \
-    --reminder "email:1d" \
-    --reminder "popup:1h"
+    "" \
+    "" \
+    "$EMAIL_ID"
 ```
 
 **Deadline Event Properties:**
@@ -308,14 +310,12 @@ When creating events with deadlines, send a notification email to alert the user
 ```bash
 # Load config
 CONFIG_FILE="$HOME/.config/email-to-calendar/config.json"
-GMAIL_ACCOUNT=$(jq -r '.gmail_account' "$CONFIG_FILE")
 USER_EMAIL=$(jq -r '.deadline_notifications.email_recipient // .gmail_account' "$CONFIG_FILE")
 NOTIFICATIONS_ENABLED=$(jq -r '.deadline_notifications.enabled // false' "$CONFIG_FILE")
 
-# Send notification if enabled
+# Send notification if enabled (using wrapper script)
 if [ "$NOTIFICATIONS_ENABLED" = "true" ]; then
-    gog gmail send \
-        --account "$GMAIL_ACCOUNT" \
+    "$SCRIPTS_DIR/email_send.sh" \
         --to "$USER_EMAIL" \
         --subject "ACTION REQUIRED: Get tickets for Spring Concert by Feb 15" \
         --body "A calendar event has been created that requires your action.

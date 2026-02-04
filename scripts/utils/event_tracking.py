@@ -110,10 +110,14 @@ def lookup_events(
     search_type: str,
     search_value: str = "",
     validate: bool = False,
-    script_dir: str = ""
+    script_dir: str = "",
+    provider: str = ""
 ) -> None:
     """Look up tracked events and print as JSON."""
     import subprocess
+
+    # Import calendar_ops for validation
+    from calendar_ops import search_events
 
     data = load_json(EVENTS_FILE, {"events": []})
     events = data.get("events", [])
@@ -144,10 +148,19 @@ def lookup_events(
                 start = event.get("start", "")
                 if start:
                     date_part = start.split("T")[0]
-                    cmd = f'gog calendar events "{calendar_id}" --from "{date_part}T00:00:00" --to "{date_part}T23:59:59" --json 2>/dev/null'
-                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-                    if result.returncode == 0:
-                        cal_events = json.loads(result.stdout) if result.stdout else []
+                    from_dt = f"{date_part}T00:00:00"
+                    to_dt = f"{date_part}T23:59:59"
+
+                    # Use calendar_ops.search_events instead of direct gog call
+                    search_result = search_events(
+                        calendar_id=calendar_id,
+                        from_dt=from_dt,
+                        to_dt=to_dt,
+                        provider=provider if provider else None
+                    )
+
+                    if search_result.get("success"):
+                        cal_events = search_result.get("data", []) or []
                         found = any(e.get("id") == event_id for e in cal_events)
                         if found:
                             valid_results.append(event)
@@ -159,6 +172,7 @@ def lookup_events(
                                     shell=True, capture_output=True
                                 )
                     else:
+                        # On error, assume event still exists
                         valid_results.append(event)
                 else:
                     valid_results.append(event)
@@ -216,7 +230,8 @@ def main():
             search_type=args.get("type", "list"),
             search_value=args.get("value", ""),
             validate=args.get("validate", False) == True or args.get("validate", "") == "true",
-            script_dir=args.get("script_dir", "")
+            script_dir=args.get("script_dir", ""),
+            provider=args.get("provider", "")
         )
 
     else:

@@ -43,6 +43,7 @@ The skill stores settings in `~/.config/email-to-calendar/config.json`.
 
 ```json
 {
+  "provider": "gog",
   "email_mode": "direct",
   "gmail_account": "your-email@gmail.com",
   "calendar_id": "primary",
@@ -77,6 +78,7 @@ The skill stores settings in `~/.config/email-to-calendar/config.json`.
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
+| `provider` | string | `"gog"` | Email/calendar provider backend (currently only "gog" supported) |
 | `email_mode` | `"direct"` / `"forwarded"` | `"direct"` | Direct scans your inbox; Forwarded only processes forwarded emails |
 | `gmail_account` | string | (auto-detected) | Gmail account to monitor |
 | `calendar_id` | string | `"primary"` | Calendar to create events in |
@@ -119,6 +121,7 @@ The skill guesses the best mode based on your email pattern:
 
 ```json
 {
+  "provider": "gog",
   "email_mode": "direct",
   "gmail_account": "family@gmail.com",
   "calendar_id": "primary",
@@ -153,6 +156,7 @@ The skill guesses the best mode based on your email pattern:
 
 ```json
 {
+  "provider": "gog",
   "email_mode": "direct",
   "gmail_account": "work@company.com",
   "calendar_id": "primary",
@@ -187,6 +191,7 @@ The skill guesses the best mode based on your email pattern:
 
 ```json
 {
+  "provider": "gog",
   "email_mode": "direct",
   "gmail_account": "personal@gmail.com",
   "calendar_id": "primary",
@@ -219,6 +224,7 @@ If you prefer to skip the interactive setup:
 mkdir -p ~/.config/email-to-calendar
 cat > ~/.config/email-to-calendar/config.json << 'EOF'
 {
+  "provider": "gog",
   "email_mode": "direct",
   "gmail_account": "your-email@gmail.com",
   "calendar_id": "primary",

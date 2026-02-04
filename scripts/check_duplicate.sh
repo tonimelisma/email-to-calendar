@@ -1,14 +1,29 @@
 #!/bin/bash
 # Check for duplicate calendar events
-# Usage: check_duplicate.sh <calendar_id> <event_title> <date> [time]
+# Usage: check_duplicate.sh <calendar_id> <event_title> <date> [time] [--provider <provider>]
 
 CALENDAR_ID="${1:-primary}"
 EVENT_TITLE="$2"
 DATE="$3"
 TIME="${4:-}"
+PROVIDER=""
+
+# Parse optional --provider flag
+shift 4 2>/dev/null || true
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --provider)
+            PROVIDER="$2"
+            shift 2
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
 
 if [ -z "$EVENT_TITLE" ] || [ -z "$DATE" ]; then
-    echo "Usage: check_duplicate.sh <calendar_id> <event_title> <date> [time]" >&2
+    echo "Usage: check_duplicate.sh <calendar_id> <event_title> <date> [time] [--provider <provider>]" >&2
     exit 1
 fi
 
@@ -29,8 +44,13 @@ fi
 START_DATE=$(date -d "$ISO_DATE -1 day" '+%Y-%m-%dT00:00:00Z' 2>/dev/null || date -v-1d -j -f "%Y-%m-%d" "$ISO_DATE" "+%Y-%m-%dT00:00:00Z")
 END_DATE=$(date -d "$ISO_DATE +2 days" '+%Y-%m-%dT00:00:00Z' 2>/dev/null || date -v+2d -j -f "%Y-%m-%d" "$ISO_DATE" "+%Y-%m-%dT00:00:00Z")
 
-# Search for events
-events=$(gog calendar events "$CALENDAR_ID" --from "$START_DATE" --to "$END_DATE" --json 2>/dev/null)
+# Search for events using calendar_search.sh
+SEARCH_ARGS="--calendar-id \"$CALENDAR_ID\" --from \"$START_DATE\" --to \"$END_DATE\""
+if [ -n "$PROVIDER" ]; then
+    SEARCH_ARGS="$SEARCH_ARGS --provider \"$PROVIDER\""
+fi
+events_result=$(eval "$SCRIPT_DIR/calendar_search.sh" $SEARCH_ARGS 2>/dev/null)
+events=$(echo "$events_result" | jq -r '.data // []' 2>/dev/null)
 
 if [ -z "$events" ] || [ "$events" = "[]" ]; then
     echo "null"

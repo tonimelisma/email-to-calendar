@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.11.0] - 2026-02-03
+
+### Added
+- **Provider Abstraction Layer**: All email and calendar operations now go through wrapper scripts
+  - New `scripts/utils/email_ops.py`: Provider-agnostic email operations (read, search, modify, send)
+  - New `scripts/utils/calendar_ops.py`: Provider-agnostic calendar operations (search, create, update, delete)
+  - New shell wrappers: `email_read.sh`, `email_search.sh`, `email_modify.sh`, `email_send.sh`
+  - New shell wrappers: `calendar_search.sh`, `calendar_delete.sh`
+- **Provider Configuration**: New `provider` field in config.json (default: "gog")
+- **`--provider` Parameter**: All scripts now accept optional `--provider` override
+
+### Changed
+- **create_event.sh**: Now uses `calendar_ops.py` instead of direct `gog` calls
+- **undo.sh**: Now uses `calendar_ops.py` for all calendar operations
+- **check_duplicate.sh**: Now uses `calendar_search.sh` wrapper
+- **event_tracking.py**: Validation now uses `calendar_ops.search_events()` instead of subprocess
+- **SKILL.md**: All `gog` command examples replaced with wrapper script calls
+  - LLM should NEVER call `gog` directly - always use scripts for proper tracking
+
+### Documentation
+- `SETUP.md`: Added `provider` configuration option documentation
+- Updated all example configs to include `provider` field
+
+### Future Extension
+To add a new provider (e.g., Outlook):
+1. Add implementation in `email_ops.py` and `calendar_ops.py`
+2. Set `"provider": "outlook"` in config
+3. No script changes needed
+
 ## [1.10.0] - 2026-02-03
 
 ### Added
