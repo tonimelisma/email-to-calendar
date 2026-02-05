@@ -40,6 +40,23 @@ if [ -z "$TITLE" ] || [ -z "$DATE" ]; then
     exit 1
 fi
 
+# Get agent name from config for attribution (default: "Ripurapu")
+CONFIG_FILE="$HOME/.config/email-to-calendar/config.json"
+AGENT_NAME=$(jq -r '.agent_name // "Ripurapu"' "$CONFIG_FILE" 2>/dev/null)
+if [ -z "$AGENT_NAME" ] || [ "$AGENT_NAME" = "null" ]; then
+    AGENT_NAME="Ripurapu"
+fi
+
+# Append agent attribution to description
+if [ -n "$DESCRIPTION" ]; then
+    DESCRIPTION="$DESCRIPTION
+
+---
+Created by $AGENT_NAME (AI assistant)"
+else
+    DESCRIPTION="Created by $AGENT_NAME (AI assistant)"
+fi
+
 # Parse date to ISO format using shared parser
 ISO_DATE=$(python3 "$SCRIPT_DIR/utils/date_parser.py" date "$DATE" 2>/dev/null)
 

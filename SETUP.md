@@ -96,6 +96,7 @@ The skill stores settings in `~/.config/email-to-calendar/config.json`.
 | `email_handling.auto_dispose_calendar_replies` | boolean | `true` | Auto-process calendar reply emails (accepts, declines, tentatives) |
 | `deadline_notifications.enabled` | boolean | `false` | Send email notifications for events with deadlines |
 | `deadline_notifications.email_recipient` | string | (gmail_account) | Email address to send notifications to |
+| `agent_name` | string | `"Ripurapu"` | Agent name shown in event descriptions ("Created by X") |
 
 ### Email Mode Detection
 

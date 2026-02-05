@@ -13,7 +13,7 @@ After completing any work on this skill, you must complete ALL of the following:
 cd ~/.openclaw/workspace/skills/email-to-calendar/scripts
 ./run_tests.sh
 ```
-All 135 tests must pass before proceeding.
+All 154 tests must pass before proceeding.
 
 ### 2. Update CHANGELOG.md
 Document what changed with today's date, following existing format.

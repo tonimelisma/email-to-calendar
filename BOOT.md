@@ -17,10 +17,27 @@ If any capability is missing, inform the user:
 > "This skill requires email and calendar access. Please ensure you have
 > the necessary tools configured (e.g., gog CLI, or an MCP server)."
 
-### 2. Check Heartbeat Integration
+### 2. Critical Operating Rules
 
-Read `~/.openclaw/workspace/HEARTBEAT.md` and ensure it contains both:
-- "Email Scanning" section
+**NEVER call `gog` or other CLI tools directly.** Always use the wrapper scripts:
+- `create_event.sh` - Create/update events (handles tracking, changelog, attribution)
+- `email_read.sh` - Read email content
+- `email_search.sh` - Search emails
+- `email_modify.sh` - Modify email labels
+- `disposition_email.sh` - Mark read and/or archive
+- `process_calendar_replies.sh` - Auto-archive calendar notifications
+
+Direct CLI calls bypass event tracking and cause duplicate events.
+
+**IGNORE calendar notification emails** from `calendar-notification@google.com`:
+- Subject patterns: "Accepted:", "Declined:", "Tentative:", "Updated invitation:", "Cancelled:"
+- These are responses to existing invites, NOT new events to create
+- Run `process_calendar_replies.sh` to auto-archive them
+
+### 3. Check Heartbeat Integration
+
+Read `~/.openclaw/workspace/HEARTBEAT.md` and ensure it contains:
+- "Email Check" or "Email Scanning" section with calendar notification exclusion
 - "Pending Calendar Invites" section
 
 ## Heartbeat Sections to Add
@@ -29,11 +46,16 @@ If the following sections are not present in HEARTBEAT.md, add them:
 
 ```markdown
 ## Email Scanning (email-to-calendar skill)
-During email check cycle (every 4-8 hours):
-1. Check for unread emails with event indicators (dates, times, meeting keywords)
-2. If events found, extract and present to user for selection
-3. Created events are tracked; user can undo within 24 hours
-4. Log all scanning activity silently for audit trail
+During email check cycle:
+1. **IGNORE calendar notification emails** - DO NOT process emails from `calendar-notification@google.com`
+   - These include: "Accepted:", "Declined:", "Tentative:", "Updated invitation:", "Cancelled:"
+   - These are just notifications about responses to existing invites, NOT new events
+   - Run `~/.openclaw/workspace/skills/email-to-calendar/scripts/process_calendar_replies.sh` to auto-archive them
+2. Check for other unread emails with event indicators (dates, times, meeting keywords)
+3. If events found, extract and present to user for selection
+4. **ALWAYS use wrapper scripts** - NEVER call `gog` directly
+5. Created events are tracked; user can undo within 24 hours
+6. Log all scanning activity silently for audit trail
 ```
 
 ```markdown
@@ -65,10 +87,21 @@ fi
 if ! grep -q "Pending Calendar Invites" "$HOME/.openclaw/workspace/HEARTBEAT.md" 2>/dev/null; then
     echo "HEARTBEAT.md needs pending invites section"
 fi
+
+# Process any unread calendar notification emails
+~/.openclaw/workspace/skills/email-to-calendar/scripts/process_calendar_replies.sh 2>/dev/null || true
 ```
 
 ## Memory Directories
 
 Ensure these directories exist:
-- `~/.openclaw/workspace/memory/email-to-calendar/` - For pending_invites.json and events.json
+- `~/.openclaw/workspace/memory/email-to-calendar/` - For pending_invites.json, events.json, activity.json, changelog.json
 - `~/.openclaw/workspace/memory/email-extractions/` - For extraction files and index.json
+
+## Configuration
+
+See [SETUP.md](SETUP.md) for configuration options. Key settings:
+- `agent_name` - Name shown in event descriptions (default: "Ripurapu")
+- `email_handling.mark_read` - Mark emails as read after processing (default: true)
+- `email_handling.archive` - Archive emails after processing (default: true)
+- `email_handling.auto_dispose_calendar_replies` - Auto-process calendar notifications (default: true)

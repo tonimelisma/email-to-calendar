@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.12.1] - 2026-02-04
+
+### Added
+- **Agent Attribution**: Event descriptions now include "Created by [agent_name] (AI assistant)" footer
+  - Configurable via `agent_name` in config.json (default: "Ripurapu")
+
+### Changed
+- **SKILL.md Critical Rules**: Added prominent warnings about using scripts vs direct `gog` calls
+  - Rule 1 now explicitly forbids direct `gog` usage
+  - Rule 2 warns to ignore calendar notification emails (from `calendar-notification@google.com`)
+  - Added large warning block with WRONG/RIGHT examples
+- **BOOT.md**: Complete rewrite with critical operating rules
+  - Added "Critical Operating Rules" section listing all wrapper scripts
+  - Added explicit warning to ignore calendar notification emails
+  - Updated heartbeat section templates with calendar notification exclusion
+  - Added configuration reference section
+- **create_event.sh**: Auto-appends agent attribution to all event descriptions
+- **CONTRIBUTING.md**: Updated test count to 154
+
 ## [1.12.0] - 2026-02-04
 
 ### Added
