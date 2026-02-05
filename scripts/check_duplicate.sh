@@ -45,11 +45,12 @@ START_DATE=$(date -d "$ISO_DATE -1 day" '+%Y-%m-%dT00:00:00Z' 2>/dev/null || dat
 END_DATE=$(date -d "$ISO_DATE +2 days" '+%Y-%m-%dT00:00:00Z' 2>/dev/null || date -v+2d -j -f "%Y-%m-%d" "$ISO_DATE" "+%Y-%m-%dT00:00:00Z")
 
 # Search for events using calendar_search.sh
-SEARCH_ARGS="--calendar-id \"$CALENDAR_ID\" --from \"$START_DATE\" --to \"$END_DATE\""
+# Build args array (avoids eval quoting issues)
+SEARCH_ARGS=(--calendar-id "$CALENDAR_ID" --from "$START_DATE" --to "$END_DATE")
 if [ -n "$PROVIDER" ]; then
-    SEARCH_ARGS="$SEARCH_ARGS --provider \"$PROVIDER\""
+    SEARCH_ARGS+=(--provider "$PROVIDER")
 fi
-events_result=$(eval "$SCRIPT_DIR/calendar_search.sh" $SEARCH_ARGS 2>/dev/null)
+events_result=$("$SCRIPT_DIR/calendar_search.sh" "${SEARCH_ARGS[@]}" 2>/dev/null)
 events=$(echo "$events_result" | jq -r '.data // []' 2>/dev/null)
 
 if [ -z "$events" ] || [ "$events" = "[]" ]; then
@@ -75,14 +76,25 @@ time_str = '$TIME'
 for event in events:
     event_title = event.get('summary', '').lower()
     event_start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date', ''))
-    
+
     # Check if same date
     if search_date in event_start:
-        # Check title similarity (at least 2 keywords match)
+        # Check title similarity with improved logic for short titles
         matches = sum(1 for kw in title_keywords if kw in event_title)
-        if matches >= 2 or len(title_keywords) <= 2:
-            print(json.dumps(event))
-            sys.exit(0)
+        total_keywords = len(title_keywords)
+
+        if total_keywords == 0:
+            continue
+        elif total_keywords <= 2:
+            # Short titles: require ALL keywords to match
+            if matches == total_keywords:
+                print(json.dumps(event))
+                sys.exit(0)
+        else:
+            # Longer titles: require at least 50% match
+            if matches >= (total_keywords + 1) // 2:
+                print(json.dumps(event))
+                sys.exit(0)
 
 print('null')
 "

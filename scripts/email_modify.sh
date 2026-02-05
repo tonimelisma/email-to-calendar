@@ -42,15 +42,16 @@ if [ -z "$EMAIL_ID" ]; then
     exit 1
 fi
 
-ARGS="modify --email-id \"$EMAIL_ID\""
+# Build args array (avoids eval quoting issues)
+ARGS=(modify --email-id "$EMAIL_ID")
 if [ -n "$REMOVE_LABELS" ]; then
-    ARGS="$ARGS --remove-labels \"$REMOVE_LABELS\""
+    ARGS+=(--remove-labels "$REMOVE_LABELS")
 fi
 if [ -n "$ADD_LABELS" ]; then
-    ARGS="$ARGS --add-labels \"$ADD_LABELS\""
+    ARGS+=(--add-labels "$ADD_LABELS")
 fi
 if [ -n "$PROVIDER" ]; then
-    ARGS="$ARGS --provider \"$PROVIDER\""
+    ARGS+=(--provider "$PROVIDER")
 fi
 
-eval python3 "$UTILS_DIR/email_ops.py" $ARGS
+python3 "$UTILS_DIR/email_ops.py" "${ARGS[@]}"

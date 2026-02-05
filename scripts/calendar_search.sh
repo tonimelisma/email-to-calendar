@@ -42,12 +42,13 @@ if [ -z "$FROM_DT" ] || [ -z "$TO_DT" ]; then
     exit 1
 fi
 
-ARGS="search --from \"$FROM_DT\" --to \"$TO_DT\""
+# Build args array (avoids eval quoting issues)
+ARGS=(search --from "$FROM_DT" --to "$TO_DT")
 if [ -n "$CALENDAR_ID" ]; then
-    ARGS="$ARGS --calendar-id \"$CALENDAR_ID\""
+    ARGS+=(--calendar-id "$CALENDAR_ID")
 fi
 if [ -n "$PROVIDER" ]; then
-    ARGS="$ARGS --provider \"$PROVIDER\""
+    ARGS+=(--provider "$PROVIDER")
 fi
 
-eval python3 "$UTILS_DIR/calendar_ops.py" $ARGS
+python3 "$UTILS_DIR/calendar_ops.py" "${ARGS[@]}"

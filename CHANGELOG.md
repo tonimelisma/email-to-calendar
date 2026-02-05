@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.13.0] - 2026-02-05
+
+### Fixed
+- **Critical Shell Quoting Bug**: Fixed `eval ... $ARGS` pattern in all shell scripts that caused arguments with embedded quotes to fail silently
+  - Affected scripts: `disposition_email.sh`, `email_modify.sh`, `email_search.sh`, `calendar_search.sh`, `create_event.sh`, `check_duplicate.sh`
+  - Now uses proper bash array expansion `"${ARGS[@]}"` for safe argument passing
+  - This was causing email disposition (mark read, archive) to fail after event creation
+  - This was causing event tracking to `events.json` to fail
+
+- **Duplicate Detection Logic**: Fixed flawed duplicate detection for short titles
+  - Previously: Single-word titles like "Fastelavn" matched ANY event containing that word on the same date
+  - Now: Short titles (1-2 keywords) require ALL keywords to match; longer titles require 50% match
+  - Prevents false-positive duplicates and missed actual duplicates
+
+### Added
+- **Add Pending Invite Function**: New `add_pending_invite()` function in `pending_ops.py`
+  - Records pending invites when events are presented to user (was missing entirely)
+  - Enables heartbeat reminders to work correctly
+  - Prevents `pending_invites.json` from staying empty
+
+- **add_pending.sh**: New shell wrapper script for adding pending invites
+  - Usage: `add_pending.sh --email-id <id> --email-subject <subject> --events-json <json>`
+  - Uses proper array-based argument passing
+
+- **Unit Tests**: 4 new tests for `add_pending_invite()` function
+  - `test_add_new_invite`
+  - `test_add_updates_existing_invite`
+  - `test_add_multiple_events`
+  - `test_add_creates_file_if_missing`
+
+### Changed
+- **SKILL.md**: Updated workflow documentation to use `add_pending.sh` for recording pending invites
+
 ## [1.12.1] - 2026-02-04
 
 ### Added

@@ -59,22 +59,23 @@ if [ -z "$EMAIL_ID" ]; then
     exit 1
 fi
 
-ARGS="disposition --email-id \"$EMAIL_ID\""
+# Build args array (avoids eval quoting issues)
+ARGS=(disposition --email-id "$EMAIL_ID")
 
 if [ "$MARK_READ" = "true" ]; then
-    ARGS="$ARGS --mark-read true"
+    ARGS+=(--mark-read true)
 fi
 if [ "$NO_MARK_READ" = "true" ]; then
-    ARGS="$ARGS --no-mark-read"
+    ARGS+=(--no-mark-read)
 fi
 if [ "$ARCHIVE" = "true" ]; then
-    ARGS="$ARGS --archive true"
+    ARGS+=(--archive true)
 fi
 if [ "$NO_ARCHIVE" = "true" ]; then
-    ARGS="$ARGS --no-archive"
+    ARGS+=(--no-archive)
 fi
 if [ -n "$PROVIDER" ]; then
-    ARGS="$ARGS --provider \"$PROVIDER\""
+    ARGS+=(--provider "$PROVIDER")
 fi
 
-eval python3 "$UTILS_DIR/disposition_ops.py" $ARGS
+python3 "$UTILS_DIR/disposition_ops.py" "${ARGS[@]}"

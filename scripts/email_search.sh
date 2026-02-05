@@ -41,12 +41,13 @@ if [ -z "$QUERY" ]; then
     exit 1
 fi
 
-ARGS="search --query \"$QUERY\" --max \"$MAX\""
+# Build args array (avoids eval quoting issues)
+ARGS=(search --query "$QUERY" --max "$MAX")
 if [ "$INCLUDE_BODY" = "true" ]; then
-    ARGS="$ARGS --include-body true"
+    ARGS+=(--include-body true)
 fi
 if [ -n "$PROVIDER" ]; then
-    ARGS="$ARGS --provider \"$PROVIDER\""
+    ARGS+=(--provider "$PROVIDER")
 fi
 
-eval python3 "$UTILS_DIR/email_ops.py" $ARGS
+python3 "$UTILS_DIR/email_ops.py" "${ARGS[@]}"

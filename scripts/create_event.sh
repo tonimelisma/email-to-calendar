@@ -99,19 +99,20 @@ get_event_state() {
 # Function to create a new event using calendar_ops.py
 create_new_event() {
     IS_NEW_EVENT=true
-    local ARGS="create --summary \"$TITLE\" --from \"$START_ISO\" --to \"$END_ISO\" --calendar-id \"$CALENDAR_ID\""
+    # Build args array (avoids eval quoting issues)
+    local -a CREATE_ARGS=(create --summary "$TITLE" --from "$START_ISO" --to "$END_ISO" --calendar-id "$CALENDAR_ID")
 
     if [ -n "$DESCRIPTION" ]; then
-        ARGS="$ARGS --description \"$DESCRIPTION\""
+        CREATE_ARGS+=(--description "$DESCRIPTION")
     fi
     if [ -n "$ATTENDEE_EMAIL" ]; then
-        ARGS="$ARGS --attendees \"$ATTENDEE_EMAIL\""
+        CREATE_ARGS+=(--attendees "$ATTENDEE_EMAIL")
     fi
     if [ -n "$PROVIDER" ]; then
-        ARGS="$ARGS --provider \"$PROVIDER\""
+        CREATE_ARGS+=(--provider "$PROVIDER")
     fi
 
-    RESULT=$(eval python3 "$UTILS_DIR/calendar_ops.py" $ARGS 2>&1)
+    RESULT=$(python3 "$UTILS_DIR/calendar_ops.py" "${CREATE_ARGS[@]}" 2>&1)
     # Extract event ID from JSON response (nested in data.id)
     EVENT_ID=$(echo "$RESULT" | jq -r '.data.id // empty' 2>/dev/null)
 }
@@ -123,19 +124,20 @@ if [ -n "$EXISTING_EVENT_ID" ]; then
 
     # Update existing event using calendar_ops.py
     echo "Updating existing event: $EXISTING_EVENT_ID" >&2
-    local UPDATE_ARGS="update --event-id \"$EXISTING_EVENT_ID\" --summary \"$TITLE\" --from \"$START_ISO\" --to \"$END_ISO\" --calendar-id \"$CALENDAR_ID\""
+    # Build args array (avoids eval quoting issues)
+    UPDATE_ARGS=(update --event-id "$EXISTING_EVENT_ID" --summary "$TITLE" --from "$START_ISO" --to "$END_ISO" --calendar-id "$CALENDAR_ID")
 
     if [ -n "$DESCRIPTION" ]; then
-        UPDATE_ARGS="$UPDATE_ARGS --description \"$DESCRIPTION\""
+        UPDATE_ARGS+=(--description "$DESCRIPTION")
     fi
     if [ -n "$ATTENDEE_EMAIL" ]; then
-        UPDATE_ARGS="$UPDATE_ARGS --add-attendees \"$ATTENDEE_EMAIL\""
+        UPDATE_ARGS+=(--add-attendees "$ATTENDEE_EMAIL")
     fi
     if [ -n "$PROVIDER" ]; then
-        UPDATE_ARGS="$UPDATE_ARGS --provider \"$PROVIDER\""
+        UPDATE_ARGS+=(--provider "$PROVIDER")
     fi
 
-    RESULT=$(eval python3 "$UTILS_DIR/calendar_ops.py" $UPDATE_ARGS 2>&1)
+    RESULT=$(python3 "$UTILS_DIR/calendar_ops.py" "${UPDATE_ARGS[@]}" 2>&1)
 
     # Self-healing: Check if event was deleted externally (404/410 error)
     if echo "$RESULT" | jq -e '.error_type == "not_found"' > /dev/null 2>&1 || echo "$RESULT" | grep -qiE "404|not found|410|gone|does not exist|deleted"; then
@@ -157,11 +159,12 @@ echo "$RESULT"
 
 # Track the event and log to changelog if we have an ID
 if [ -n "$EVENT_ID" ]; then
-    TRACK_ARGS="--event-id \"$EVENT_ID\" --calendar-id \"$CALENDAR_ID\" --summary \"$TITLE\" --start \"$START_ISO\""
+    # Build args array (avoids eval quoting issues)
+    TRACK_ARGS=(--event-id "$EVENT_ID" --calendar-id "$CALENDAR_ID" --summary "$TITLE" --start "$START_ISO")
     if [ -n "$EMAIL_ID" ]; then
-        TRACK_ARGS="$TRACK_ARGS --email-id \"$EMAIL_ID\""
+        TRACK_ARGS+=(--email-id "$EMAIL_ID")
     fi
-    eval "$SCRIPT_DIR/track_event.sh" $TRACK_ARGS >&2
+    "$SCRIPT_DIR/track_event.sh" "${TRACK_ARGS[@]}" >&2
     echo "Event ID: $EVENT_ID" >&2
 
     # Log to changelog for undo support

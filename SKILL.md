@@ -1,6 +1,6 @@
 ---
 name: email-to-calendar
-version: 1.12.2
+version: 1.13.0
 description: Extract calendar events from emails and create calendar entries. Supports two modes: (1) Direct inbox monitoring - scans all emails for events, or (2) Forwarded emails - processes emails you forward to a dedicated address. Features smart onboarding, event tracking, pending invite reminders, undo support, silent activity logging, deadline detection with separate reminder events, email notifications for action-required items, and provider abstraction for future extensibility.
 ---
 
@@ -133,10 +133,13 @@ Reply with numbers to create (e.g., '2, 3'), 'all', or 'none'.
 
 **STOP AND WAIT for user response.**
 
-After presenting, record pending invites:
+After presenting, record pending invites for follow-up reminders:
 ```bash
-# Record pending invites for follow-up reminders
-# (See pending_invites.json structure in File Locations)
+# Record pending invites using add_pending.sh
+"$SCRIPTS_DIR/add_pending.sh" \
+    --email-id "$EMAIL_ID" \
+    --email-subject "$EMAIL_SUBJECT" \
+    --events-json '[{"title":"Event Name","date":"2026-02-15","time":"14:00","status":"pending"}]'
 ```
 
 ### 4. Check for Duplicates (MANDATORY)
@@ -392,6 +395,12 @@ Changes can be undone within 24 hours:
 Events not immediately actioned are tracked for reminders:
 
 ```bash
+# Add pending invites (after presenting events to user)
+"$SCRIPTS_DIR/add_pending.sh" \
+    --email-id "$EMAIL_ID" \
+    --email-subject "Party Invite" \
+    --events-json '[{"title":"Birthday Party","date":"2026-02-15","time":"14:00","status":"pending"}]'
+
 # List pending invites (JSON)
 "$SCRIPTS_DIR/list_pending.sh"
 

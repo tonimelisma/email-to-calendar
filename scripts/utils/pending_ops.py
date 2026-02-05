@@ -22,6 +22,47 @@ PENDING_FILE = os.path.expanduser(
 MAX_REMINDERS = 3
 
 
+def add_pending_invite(email_id: str, email_subject: str, events: List[Dict]) -> str:
+    """Add or update a pending invite with events.
+
+    Args:
+        email_id: The email message ID
+        email_subject: The email subject line
+        events: List of event dicts with keys: title, date, time (optional), status
+
+    Returns:
+        The invite ID (new or existing)
+    """
+    data = load_json(PENDING_FILE, {"invites": []})
+
+    # Check if invite already exists for this email
+    existing = next(
+        (inv for inv in data["invites"] if inv.get("email_id") == email_id),
+        None
+    )
+
+    if existing:
+        # Update existing invite
+        existing["events"] = events
+        existing["updated_at"] = datetime.now().isoformat()
+        invite_id = existing["id"]
+    else:
+        # Create new invite
+        invite_id = f"inv_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(data['invites'])+1:03d}"
+        data["invites"].append({
+            "id": invite_id,
+            "email_id": email_id,
+            "email_subject": email_subject,
+            "events": events,
+            "created_at": datetime.now().isoformat(),
+            "reminder_count": 0,
+            "last_reminded": None
+        })
+
+    save_json(PENDING_FILE, data)
+    return invite_id
+
+
 def list_pending_summary(
     today: str,
     update_reminded: bool = False,
@@ -164,11 +205,19 @@ def main():
     summary_mode = False
     update_reminded = False
     auto_dismiss = False
+    action = "list"  # default action
+    email_id = ""
+    email_subject = ""
+    events_json = ""
 
     i = 1
     while i < len(sys.argv):
         arg = sys.argv[i]
-        if arg == "--summary":
+        if arg == "add":
+            action = "add"
+        elif arg == "list":
+            action = "list"
+        elif arg == "--summary":
             summary_mode = True
         elif arg == "--update-reminded":
             update_reminded = True
@@ -177,9 +226,34 @@ def main():
         elif arg == "--today" and i + 1 < len(sys.argv):
             today = sys.argv[i + 1]
             i += 1
+        elif arg == "--email-id" and i + 1 < len(sys.argv):
+            email_id = sys.argv[i + 1]
+            i += 1
+        elif arg == "--email-subject" and i + 1 < len(sys.argv):
+            email_subject = sys.argv[i + 1]
+            i += 1
+        elif arg == "--events-json" and i + 1 < len(sys.argv):
+            events_json = sys.argv[i + 1]
+            i += 1
         i += 1
 
-    if summary_mode:
+    if action == "add":
+        if not email_id:
+            print("Error: --email-id is required for add action", file=sys.stderr)
+            sys.exit(1)
+        if not events_json:
+            print("Error: --events-json is required for add action", file=sys.stderr)
+            sys.exit(1)
+
+        try:
+            events = json.loads(events_json)
+        except json.JSONDecodeError as e:
+            print(f"Error: Invalid JSON in --events-json: {e}", file=sys.stderr)
+            sys.exit(1)
+
+        invite_id = add_pending_invite(email_id, email_subject, events)
+        print(json.dumps({"success": True, "invite_id": invite_id}))
+    elif summary_mode:
         list_pending_summary(today, update_reminded, auto_dismiss)
     else:
         list_pending_json(today, update_reminded, auto_dismiss)
