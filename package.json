@@ -1,6 +1,6 @@
 {
   "name": "email-to-calendar",
-  "version": "1.13.0",
+  "version": "1.13.1",
   "description": "Extract calendar events from emails with smart onboarding, event tracking, undo support, and silent activity logging. Supports direct inbox monitoring or forwarded emails.",
   "author": "tonimelisma",
   "license": "MIT",

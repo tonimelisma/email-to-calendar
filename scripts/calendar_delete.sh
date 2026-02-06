@@ -36,12 +36,12 @@ if [ -z "$EVENT_ID" ]; then
     exit 1
 fi
 
-ARGS="delete --event-id \"$EVENT_ID\""
+ARGS=(delete --event-id "$EVENT_ID")
 if [ -n "$CALENDAR_ID" ]; then
-    ARGS="$ARGS --calendar-id \"$CALENDAR_ID\""
+    ARGS+=(--calendar-id "$CALENDAR_ID")
 fi
 if [ -n "$PROVIDER" ]; then
-    ARGS="$ARGS --provider \"$PROVIDER\""
+    ARGS+=(--provider "$PROVIDER")
 fi
 
-eval python3 "$UTILS_DIR/calendar_ops.py" $ARGS
+python3 "$UTILS_DIR/calendar_ops.py" "${ARGS[@]}"

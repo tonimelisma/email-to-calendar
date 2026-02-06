@@ -41,9 +41,9 @@ if [ -z "$TO" ] || [ -z "$SUBJECT" ]; then
     exit 1
 fi
 
-ARGS="send --to \"$TO\" --subject \"$SUBJECT\" --body \"$BODY\""
+ARGS=(send --to "$TO" --subject "$SUBJECT" --body "$BODY")
 if [ -n "$PROVIDER" ]; then
-    ARGS="$ARGS --provider \"$PROVIDER\""
+    ARGS+=(--provider "$PROVIDER")
 fi
 
-eval python3 "$UTILS_DIR/email_ops.py" $ARGS
+python3 "$UTILS_DIR/email_ops.py" "${ARGS[@]}"

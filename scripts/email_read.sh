@@ -31,9 +31,9 @@ if [ -z "$EMAIL_ID" ]; then
     exit 1
 fi
 
-ARGS="read --email-id \"$EMAIL_ID\""
+ARGS=(read --email-id "$EMAIL_ID")
 if [ -n "$PROVIDER" ]; then
-    ARGS="$ARGS --provider \"$PROVIDER\""
+    ARGS+=(--provider "$PROVIDER")
 fi
 
-eval python3 "$UTILS_DIR/email_ops.py" $ARGS
+python3 "$UTILS_DIR/email_ops.py" "${ARGS[@]}"

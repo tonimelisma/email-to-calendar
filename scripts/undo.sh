@@ -41,11 +41,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Build provider argument for calendar_ops.py
-PROVIDER_ARG=""
-if [ -n "$PROVIDER" ]; then
-    PROVIDER_ARG="--provider \"$PROVIDER\""
-fi
+# Provider will be added to each args array individually
 
 case "$ACTION" in
     last)
@@ -117,8 +113,11 @@ case "$ACTION_TYPE" in
     create)
         # Undo create: delete the event using calendar_ops.py
         echo "Deleting event that was created..."
-        DELETE_ARGS="delete --event-id \"$EVENT_ID\" --calendar-id \"$CALENDAR_ID\" $PROVIDER_ARG"
-        RESULT=$(eval python3 "$UTILS_DIR/calendar_ops.py" $DELETE_ARGS 2>&1)
+        DELETE_ARGS=(delete --event-id "$EVENT_ID" --calendar-id "$CALENDAR_ID")
+        if [ -n "$PROVIDER" ]; then
+            DELETE_ARGS+=(--provider "$PROVIDER")
+        fi
+        RESULT=$(python3 "$UTILS_DIR/calendar_ops.py" "${DELETE_ARGS[@]}" 2>&1)
 
         if echo "$RESULT" | jq -e '.success == false' > /dev/null 2>&1; then
             echo "Warning: Event may already be deleted: $(echo "$RESULT" | jq -r '.error')" >&2
@@ -143,16 +142,18 @@ case "$ACTION_TYPE" in
 
         echo "Restoring previous state: \"$BEFORE_SUMMARY\""
 
-        UPDATE_ARGS="update --event-id \"$EVENT_ID\" --calendar-id \"$CALENDAR_ID\" --summary \"$BEFORE_SUMMARY\""
+        UPDATE_ARGS=(update --event-id "$EVENT_ID" --calendar-id "$CALENDAR_ID" --summary "$BEFORE_SUMMARY")
         if [ -n "$BEFORE_START" ]; then
-            UPDATE_ARGS="$UPDATE_ARGS --from \"$BEFORE_START\""
+            UPDATE_ARGS+=(--from "$BEFORE_START")
         fi
         if [ -n "$BEFORE_END" ]; then
-            UPDATE_ARGS="$UPDATE_ARGS --to \"$BEFORE_END\""
+            UPDATE_ARGS+=(--to "$BEFORE_END")
         fi
-        UPDATE_ARGS="$UPDATE_ARGS $PROVIDER_ARG"
+        if [ -n "$PROVIDER" ]; then
+            UPDATE_ARGS+=(--provider "$PROVIDER")
+        fi
 
-        RESULT=$(eval python3 "$UTILS_DIR/calendar_ops.py" $UPDATE_ARGS 2>&1)
+        RESULT=$(python3 "$UTILS_DIR/calendar_ops.py" "${UPDATE_ARGS[@]}" 2>&1)
 
         if echo "$RESULT" | jq -e '.success == false' > /dev/null 2>&1; then
             echo "Error restoring event: $(echo "$RESULT" | jq -r '.error')" >&2
@@ -178,8 +179,11 @@ case "$ACTION_TYPE" in
 
         echo "Recreating deleted event: \"$BEFORE_SUMMARY\""
 
-        CREATE_ARGS="create --summary \"$BEFORE_SUMMARY\" --from \"$BEFORE_START\" --to \"$BEFORE_END\" --calendar-id \"$CALENDAR_ID\" $PROVIDER_ARG"
-        RESULT=$(eval python3 "$UTILS_DIR/calendar_ops.py" $CREATE_ARGS 2>&1)
+        CREATE_ARGS=(create --summary "$BEFORE_SUMMARY" --from "$BEFORE_START" --to "$BEFORE_END" --calendar-id "$CALENDAR_ID")
+        if [ -n "$PROVIDER" ]; then
+            CREATE_ARGS+=(--provider "$PROVIDER")
+        fi
+        RESULT=$(python3 "$UTILS_DIR/calendar_ops.py" "${CREATE_ARGS[@]}" 2>&1)
 
         NEW_EVENT_ID=$(echo "$RESULT" | jq -r '.data.id // empty' 2>/dev/null)
 

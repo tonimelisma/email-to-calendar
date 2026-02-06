@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.13.1] - 2026-02-05
+
+### Fixed
+- **Complete Shell Quoting Fix**: Fixed remaining `eval ... $ARGS` patterns missed in v1.13.0
+  - Affected scripts: `calendar_delete.sh`, `email_read.sh`, `email_send.sh`, `undo.sh`, `process_calendar_replies.sh`
+  - Converted string-based argument building to bash arrays with `"${ARGS[@]}"` expansion
+  - All shell scripts now use safe array-based argument passing
+
 ## [1.13.0] - 2026-02-05
 
 ### Fixed

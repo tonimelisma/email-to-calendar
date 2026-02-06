@@ -47,15 +47,13 @@ if [ "$AUTO_DISPOSE" != "true" ]; then
     exit 0
 fi
 
-# Build provider arg if specified
-PROVIDER_ARG=""
-if [ -n "$PROVIDER" ]; then
-    PROVIDER_ARG="--provider \"$PROVIDER\""
-fi
-
 # Search for unread calendar notification emails
 SEARCH_QUERY="from:calendar-notification@google.com is:unread"
-SEARCH_RESULT=$(eval "$SCRIPT_DIR/email_search.sh" --query \"$SEARCH_QUERY\" --max 50 $PROVIDER_ARG 2>/dev/null)
+SEARCH_ARGS=(--query "$SEARCH_QUERY" --max 50)
+if [ -n "$PROVIDER" ]; then
+    SEARCH_ARGS+=(--provider "$PROVIDER")
+fi
+SEARCH_RESULT=$("$SCRIPT_DIR/email_search.sh" "${SEARCH_ARGS[@]}" 2>/dev/null)
 
 if [ $? -ne 0 ] || [ -z "$SEARCH_RESULT" ]; then
     echo '{"success": false, "error": "Failed to search for calendar reply emails"}'
@@ -111,7 +109,11 @@ echo "$EMAILS" | jq -c '.[]' | while read -r email; do
         echo "Would disposition: $EMAIL_ID - $SUBJECT" >&2
     else
         # Disposition the email
-        RESULT=$(eval "$SCRIPT_DIR/disposition_email.sh" --email-id \"$EMAIL_ID\" $PROVIDER_ARG 2>/dev/null)
+        DISPOSITION_ARGS=(--email-id "$EMAIL_ID")
+        if [ -n "$PROVIDER" ]; then
+            DISPOSITION_ARGS+=(--provider "$PROVIDER")
+        fi
+        RESULT=$("$SCRIPT_DIR/disposition_email.sh" "${DISPOSITION_ARGS[@]}" 2>/dev/null)
         if echo "$RESULT" | jq -e '.success' > /dev/null 2>&1; then
             echo "Dispositioned: $EMAIL_ID - $SUBJECT" >&2
         else
