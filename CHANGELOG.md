@@ -2,7 +2,19 @@
 
 ## [1.13.2] - 2026-06-29
 
+### Fixed
+- **Shell injection / quoting in `event_tracking.py`**: The orphan-cleanup path
+  used `subprocess.run(..., shell=True)` with an interpolated event ID — the last
+  instance of the shell-quoting bug class fixed across the other scripts in
+  v1.13.0/v1.13.1. Converted to safe list-form arguments. Also clears the
+  `code-execution` finding in ClawHub's static security scan.
+
 ### Changed
+- **SKILL.md description + transparency**: Rewrote the frontmatter `description`
+  for clarity and discoverability (semantic search) and added a "What This Skill
+  Accesses" section that discloses every email/calendar action (reads Gmail,
+  manages Calendar, optional reminder emails, label changes, local-only state).
+  Improves ClawHub coherence scoring and user trust.
 - **Documentation cleanup ("spring cleaning")** — no behavior changes:
   - `references/workflow-example.md`: Rewrote end-to-end. The old example was
     built around the deleted `extract_events.py` and called `gog calendar create`
