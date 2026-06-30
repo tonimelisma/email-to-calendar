@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.13.3] - 2026-06-30
+
+### Added
+- **README.md**: Concise project README for the ClawHub listing and GitHub —
+  value proposition, feature overview, install/setup, transparency, and license.
+
 ## [1.13.2] - 2026-06-29
 
 ### Fixed
