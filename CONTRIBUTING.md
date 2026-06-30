@@ -13,7 +13,7 @@ After completing any work on this skill, you must complete ALL of the following:
 cd ~/.openclaw/workspace/skills/email-to-calendar/scripts
 ./run_tests.sh
 ```
-All 154 tests must pass before proceeding.
+All 158 tests must pass before proceeding.
 
 ### 2. Update CHANGELOG.md
 Document what changed with today's date, following existing format.
@@ -71,11 +71,11 @@ Tests use Python's built-in `unittest` module (no pip install required).
 # Run all tests
 ./scripts/run_tests.sh
 
-# Run specific test file
-python3 -m pytest scripts/tests/test_date_parser.py
+# Run a specific test file (via the runner)
+./scripts/run_tests.sh test_date_parser
 
 # Run with verbose output
-python3 -m unittest discover -v scripts/tests/
+python3 -m unittest discover -s scripts/tests -v
 ```
 
 ## Code Style

@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.13.2] - 2026-06-29
+
+### Changed
+- **Documentation cleanup ("spring cleaning")** — no behavior changes:
+  - `references/workflow-example.md`: Rewrote end-to-end. The old example was
+    built around the deleted `extract_events.py` and called `gog calendar create`
+    directly, contradicting CRITICAL RULE #1. Now uses the wrapper scripts
+    (`email_read.sh`, `add_pending.sh`, `lookup_event.sh`, `create_event.sh`).
+  - `references/extraction-patterns.md`: Reframed from "the extraction script"
+    to agent-direct extraction (the script no longer exists). Aligned the
+    duplicate-detection description with the actual `check_duplicate.sh` logic
+    and replaced the dead script's output schema / `Testing` section with a
+    pointer to the SKILL.md field list.
+  - `SETUP.md`: Fixed the "Full Schema" example — `email_handling.archive` was
+    `false`, contradicting the documented default (`true`); added the
+    `auto_dispose_calendar_replies` and `agent_name` keys for consistency.
+  - `CONTRIBUTING.md`: Updated test count (154 → 158) and replaced the `pytest`
+    example (which contradicted "no pip install required") with the project's
+    own `run_tests.sh` / unittest invocations.
+
 ## [1.13.1] - 2026-02-05
 
 ### Fixed
