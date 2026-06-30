@@ -16,9 +16,20 @@
   - `SETUP.md`: Fixed the "Full Schema" example — `email_handling.archive` was
     `false`, contradicting the documented default (`true`); added the
     `auto_dispose_calendar_replies` and `agent_name` keys for consistency.
-  - `CONTRIBUTING.md`: Updated test count (154 → 158) and replaced the `pytest`
+  - `CONTRIBUTING.md`: Updated test count (154 → 158); replaced the `pytest`
     example (which contradicted "no pip install required") with the project's
-    own `run_tests.sh` / unittest invocations.
+    own `run_tests.sh` / unittest invocations; refreshed the ClawHub publish
+    steps to the current CLI (`clawhub login` + `clawhub skill publish`).
+
+### Added
+- **LICENSE**: Added an explicit MIT `LICENSE` file (previously the license was
+  only declared in `package.json`).
+
+### Removed
+- **package.json**: Removed the vestigial package manifest. Nothing in the skill
+  read it; metadata now lives solely in the SKILL.md frontmatter (also removing
+  the two-place version bump). Its `openclaw` block additionally caused the
+  ClawHub CLI to classify the skill as a plugin and refuse to publish as a skill.
 
 ## [1.13.1] - 2026-02-05
 
