@@ -1,6 +1,6 @@
 ---
 name: email-to-calendar
-version: 1.13.2
+version: 1.13.3
 description: Turn emails into Google Calendar events. Scans your Gmail inbox (or only forwarded emails) to extract meetings, appointments, RSVPs, and deadlines, then creates and updates calendar entries after you confirm. Reads Gmail and manages Google Calendar through the gog CLI; can send deadline-reminder emails, archive and label processed mail, delete events on undo, and stores event-tracking state locally (no external servers or telemetry). Features smart onboarding, duplicate detection, pending-invite reminders, 24-hour undo, silent activity logging, separate deadline reminder events, and provider abstraction. Use for forwarded-email-to-calendar, auto-creating events from your inbox, and extracting meetings and RSVP deadlines from email.
 ---
 
